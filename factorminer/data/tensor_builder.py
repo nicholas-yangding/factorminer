@@ -1,0 +1,387 @@
+"""Build the data tensor D in R^(M x T x F) for FactorMiner.
+
+Converts preprocessed panel data into dense 3-D arrays indexed by
+(assets, time_periods, features).  Supports numpy and optional torch backends.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Literal, Optional, Sequence, Tuple, Union
+
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+# Default feature ordering matching the paper specification
+DEFAULT_FEATURES: list[str] = [
+    "open", "high", "low", "close", "volume", "amount", "vwap", "returns",
+]
+
+Backend = Literal["numpy", "torch", "cupy"]
+
+
+@dataclass
+class TensorConfig:
+    """Configuration for tensor construction.
+
+    Attributes
+    ----------
+    features : list of str
+        Ordered feature columns to include in the tensor.
+    backend : str
+        ``"numpy"``, ``"torch"``, or ``"cupy"``.
+    dtype : str
+        Numeric dtype string (e.g. ``"float32"``).
+    train_end : str or None
+        Inclusive upper bound for the training period (ISO datetime).
+    test_start : str or None
+        Inclusive lower bound for the test period (ISO datetime).
+    m_fast : int or None
+        Number of assets for the fast screening subset.  When *None*,
+        no fast subset is produced.
+    seed : int
+        Random seed for reproducible asset sampling.
+    target_column : str
+        Name of the column holding the target variable (created by
+        :func:`compute_target`).
+    """
+
+    features: list[str] = field(default_factory=lambda: list(DEFAULT_FEATURES))
+    backend: Backend = "numpy"
+    dtype: str = "float32"
+    train_end: Optional[str] = None
+    test_start: Optional[str] = None
+    m_fast: Optional[int] = None
+    seed: int = 42
+    target_column: str = "target"
+
+
+# ---------------------------------------------------------------------------
+# Target variable
+# ---------------------------------------------------------------------------
+
+def compute_target(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute the target: next-bar open-to-close return.
+
+    For each asset the target at time *t* is defined as::
+
+        target[t] = close[t+1] / open[t+1] - 1
+
+    The last bar of each asset has a NaN target.
+    """
+    df = df.sort_values(["asset_id", "datetime"]).copy()
+    df["_next_open"] = df.groupby("asset_id")["open"].shift(-1)
+    df["_next_close"] = df.groupby("asset_id")["close"].shift(-1)
+    df["target"] = df["_next_close"] / df["_next_open"] - 1
+    df = df.drop(columns=["_next_open", "_next_close"])
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Tensor construction helpers
+# ---------------------------------------------------------------------------
+
+def _to_backend(arr: np.ndarray, backend: Backend, dtype: str):
+    """Convert a numpy array to the requested backend."""
+    np_dtype = getattr(np, dtype, np.float32)
+    arr = arr.astype(np_dtype)
+
+    if backend == "numpy":
+        return arr
+
+    if backend == "torch":
+        try:
+            import torch
+        except ImportError as exc:
+            raise ImportError(
+                "PyTorch is required for backend='torch'. "
+                "Install with: pip install torch"
+            ) from exc
+        torch_dtype = getattr(torch, dtype, torch.float32)
+        return torch.from_numpy(arr).to(torch_dtype)
+
+    if backend == "cupy":
+        try:
+            import cupy  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise ImportError(
+                "CuPy is required for backend='cupy'. "
+                "Install with: pip install cupy"
+            ) from exc
+        return cupy.asarray(arr, dtype=dtype)
+
+    raise ValueError(f"Unknown backend: {backend}")
+
+
+def _build_3d(
+    df: pd.DataFrame,
+    asset_ids: np.ndarray,
+    timestamps: np.ndarray,
+    columns: Sequence[str],
+) -> np.ndarray:
+    """Pivot panel data into a dense (M, T, F) numpy array."""
+    M = len(asset_ids)
+    T = len(timestamps)
+    F = len(columns)
+    tensor = np.full((M, T, F), np.nan, dtype=np.float64)
+
+    asset_map = {a: i for i, a in enumerate(asset_ids)}
+    time_map = {t: j for j, t in enumerate(timestamps)}
+
+    df_idx = df.copy()
+    df_idx["_ai"] = df_idx["asset_id"].map(asset_map)
+    df_idx["_ti"] = df_idx["datetime"].map(time_map)
+    df_idx = df_idx.dropna(subset=["_ai", "_ti"])
+    df_idx["_ai"] = df_idx["_ai"].astype(int)
+    df_idx["_ti"] = df_idx["_ti"].astype(int)
+
+    values = df_idx[list(columns)].to_numpy(dtype=np.float64)
+    tensor[df_idx["_ai"].values, df_idx["_ti"].values, :] = values
+
+    return tensor
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+@dataclass
+class TensorDataset:
+    """Container for the built tensor and associated metadata.
+
+    Attributes
+    ----------
+    data : array-like
+        Feature tensor of shape ``(M, T, F)``.
+    target : array-like or None
+        Target array of shape ``(M, T)``.
+    asset_ids : np.ndarray
+        Asset identifier for each row in the first axis.
+    timestamps : np.ndarray
+        Datetime for each position in the second axis.
+    feature_names : list of str
+        Feature name for each slice in the third axis.
+    """
+
+    data: object  # np.ndarray | torch.Tensor | cupy.ndarray
+    target: object  # same type or None
+    asset_ids: np.ndarray
+    timestamps: np.ndarray
+    feature_names: list[str]
+
+
+def build_tensor(
+    df: pd.DataFrame,
+    config: Optional[TensorConfig] = None,
+) -> TensorDataset:
+    """Build a dense 3-D tensor from preprocessed panel data.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Preprocessed market data.  Must include ``datetime``, ``asset_id``,
+        and all columns listed in ``config.features``.
+    config : TensorConfig, optional
+        Build configuration.  Uses defaults when *None*.
+
+    Returns
+    -------
+    TensorDataset
+        Dense tensor and metadata.
+    """
+    if config is None:
+        config = TensorConfig()
+
+    # Validate required feature columns
+    missing = [f for f in config.features if f not in df.columns]
+    if missing:
+        raise ValueError(f"DataFrame is missing feature columns: {missing}")
+
+    # Sorted unique axes
+    asset_ids = np.sort(df["asset_id"].unique())
+    timestamps = np.sort(df["datetime"].unique())
+
+    logger.info(
+        "Building tensor: %d assets x %d time steps x %d features",
+        len(asset_ids),
+        len(timestamps),
+        len(config.features),
+    )
+
+    data_np = _build_3d(df, asset_ids, timestamps, config.features)
+
+    # Target
+    target_np: Optional[np.ndarray] = None
+    if config.target_column in df.columns:
+        target_np = _build_3d(df, asset_ids, timestamps, [config.target_column])
+        target_np = target_np[:, :, 0]  # squeeze to (M, T)
+
+    data = _to_backend(data_np, config.backend, config.dtype)
+    target = _to_backend(target_np, config.backend, config.dtype) if target_np is not None else None
+
+    return TensorDataset(
+        data=data,
+        target=target,
+        asset_ids=asset_ids,
+        timestamps=timestamps,
+        feature_names=list(config.features),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Temporal split
+# ---------------------------------------------------------------------------
+
+def temporal_split(
+    ds: TensorDataset,
+    train_end: Optional[str] = None,
+    test_start: Optional[str] = None,
+) -> Tuple[TensorDataset, TensorDataset]:
+    """Split a :class:`TensorDataset` into train and test sets along time.
+
+    Parameters
+    ----------
+    ds : TensorDataset
+        Full dataset.
+    train_end : str, optional
+        Inclusive upper bound for training timestamps.
+    test_start : str, optional
+        Inclusive lower bound for test timestamps.  When *None* defaults to
+        the bar immediately after *train_end*.
+
+    Returns
+    -------
+    tuple of TensorDataset
+        ``(train, test)`` datasets.
+    """
+    ts = pd.to_datetime(ds.timestamps)
+
+    if train_end is not None:
+        train_mask = ts <= pd.Timestamp(train_end)
+    else:
+        # Default: first 80%
+        split_idx = int(len(ts) * 0.8)
+        train_mask = np.arange(len(ts)) < split_idx
+
+    if test_start is not None:
+        test_mask = ts >= pd.Timestamp(test_start)
+    else:
+        test_mask = ~train_mask
+
+    def _slice(mask):
+        idx = np.where(mask)[0]
+        # np arrays: index along axis 1 (time)
+        d = ds.data
+        t = ds.target
+
+        # Handle different backends
+        if hasattr(d, "numpy"):
+            # torch tensor
+            d_slice = d[:, idx, :]
+            t_slice = t[:, idx] if t is not None else None
+        elif hasattr(d, "get"):
+            # cupy
+            d_slice = d[:, idx, :]
+            t_slice = t[:, idx] if t is not None else None
+        else:
+            # numpy
+            d_slice = d[:, idx, :]
+            t_slice = t[:, idx] if t is not None else None
+
+        return TensorDataset(
+            data=d_slice,
+            target=t_slice,
+            asset_ids=ds.asset_ids,
+            timestamps=ds.timestamps[idx],
+            feature_names=ds.feature_names,
+        )
+
+    return _slice(train_mask), _slice(test_mask)
+
+
+# ---------------------------------------------------------------------------
+# Asset subset sampling
+# ---------------------------------------------------------------------------
+
+def sample_assets(
+    ds: TensorDataset,
+    m: int,
+    seed: int = 42,
+) -> TensorDataset:
+    """Return a random subset of *m* assets from *ds*.
+
+    Parameters
+    ----------
+    ds : TensorDataset
+        Full dataset.
+    m : int
+        Number of assets to sample.
+    seed : int
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    TensorDataset
+        Subset with *m* assets.
+    """
+    rng = np.random.default_rng(seed)
+    M = len(ds.asset_ids)
+    if m >= M:
+        logger.warning("Requested m=%d >= total assets %d; returning all", m, M)
+        return ds
+
+    idx = np.sort(rng.choice(M, size=m, replace=False))
+    d = ds.data
+    t = ds.target
+
+    if hasattr(d, "numpy"):
+        d_sub = d[idx, :, :]
+        t_sub = t[idx, :] if t is not None else None
+    elif hasattr(d, "get"):
+        d_sub = d[idx, :, :]
+        t_sub = t[idx, :] if t is not None else None
+    else:
+        d_sub = d[idx, :, :]
+        t_sub = t[idx, :] if t is not None else None
+
+    return TensorDataset(
+        data=d_sub,
+        target=t_sub,
+        asset_ids=ds.asset_ids[idx],
+        timestamps=ds.timestamps,
+        feature_names=ds.feature_names,
+    )
+
+
+def build_pipeline(
+    df: pd.DataFrame,
+    config: Optional[TensorConfig] = None,
+) -> Union[TensorDataset, Tuple[TensorDataset, TensorDataset]]:
+    """End-to-end: compute target, build tensor, optionally split.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Preprocessed market data.
+    config : TensorConfig, optional
+        Configuration.
+
+    Returns
+    -------
+    TensorDataset or tuple
+        If ``config.train_end`` or ``config.test_start`` is set, returns
+        ``(train, test)``; otherwise the full dataset.
+    """
+    if config is None:
+        config = TensorConfig()
+
+    df = compute_target(df)
+    ds = build_tensor(df, config)
+
+    if config.train_end is not None or config.test_start is not None:
+        return temporal_split(ds, train_end=config.train_end, test_start=config.test_start)
+
+    return ds

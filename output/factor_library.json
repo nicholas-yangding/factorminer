@@ -1,0 +1,86 @@
+{
+  "factors": [
+    {
+      "id": 1,
+      "name": "momentum_reversal",
+      "formula": "Neg(CsRank(Delta($close, 5)))",
+      "category": "Momentum",
+      "ic_mean": 0.22024675324675325,
+      "icir": 0.050849307784560566,
+      "ic_win_rate": 0.5,
+      "max_correlation": 0.0,
+      "batch_number": 1,
+      "admission_date": "2026-02-18 09:57:41"
+    },
+    {
+      "id": 2,
+      "name": "volume_surprise",
+      "formula": "CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))",
+      "category": "Volatility",
+      "ic_mean": 0.2614848484848485,
+      "icir": 0.0008583023863348376,
+      "ic_win_rate": 0.5,
+      "max_correlation": 0.0,
+      "batch_number": 1,
+      "admission_date": "2026-02-18 09:57:41"
+    },
+    {
+      "id": 3,
+      "name": "price_range_ratio",
+      "formula": "Div(Sub($high, $low), Add($high, $low))",
+      "category": "Other",
+      "ic_mean": 0.27042424242424246,
+      "icir": -0.11835911964357007,
+      "ic_win_rate": 0.46,
+      "max_correlation": 0.0,
+      "batch_number": 1,
+      "admission_date": "2026-02-18 09:57:41"
+    },
+    {
+      "id": 4,
+      "name": "vwap_deviation",
+      "formula": "CsRank(Div(Sub($close, $vwap), $vwap))",
+      "category": "VWAP",
+      "ic_mean": 0.28030735930735934,
+      "icir": -0.02848032909770418,
+      "ic_win_rate": 0.5,
+      "max_correlation": 0.0,
+      "batch_number": 1,
+      "admission_date": "2026-02-18 09:57:41"
+    },
+    {
+      "id": 5,
+      "name": "return_skew",
+      "formula": "Neg(Skew($returns, 20))",
+      "category": "Higher-Moment",
+      "ic_mean": 0.285030303030303,
+      "icir": 0.16051442952397005,
+      "ic_win_rate": 0.52,
+      "max_correlation": 0.0,
+      "batch_number": 1,
+      "admission_date": "2026-02-18 09:57:41"
+    }
+  ],
+  "diagnostics": {
+    "size": 5,
+    "category_counts": {
+      "Momentum": 1,
+      "Volatility": 1,
+      "Other": 1,
+      "VWAP": 1,
+      "Higher-Moment": 1
+    },
+    "category_avg_ic": {
+      "Momentum": 0.22024675324675325,
+      "Volatility": 0.2614848484848485,
+      "Other": 0.27042424242424246,
+      "VWAP": 0.28030735930735934,
+      "Higher-Moment": 0.285030303030303
+    },
+    "avg_correlation": 0.2739532467532467,
+    "max_correlation": 0.30174025974025964,
+    "p95_correlation": 0.29812272727272726,
+    "saturation": 0.1
+  },
+  "exported_at": "2026-02-18T09:57:41.189906"
+}

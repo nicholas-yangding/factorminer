@@ -1,0 +1,89 @@
+mining:
+  target_library_size: 110
+  batch_size: 40
+  max_iterations: 200
+  ic_threshold: 0.04
+  icir_threshold: 0.5
+  correlation_threshold: 0.5
+  replacement_ic_min: 0.10
+  replacement_ic_ratio: 1.3
+
+evaluation:
+  num_workers: 40
+  fast_screen_assets: 100
+  gpu_device: "cuda:0"
+  backend: "gpu"  # gpu, numpy, c
+
+data:
+  market: "a_shares"
+  universe: "CSI500"
+  frequency: "10min"
+  features: ["$open", "$high", "$low", "$close", "$volume", "$amt", "$vwap", "$returns"]
+  train_period: ["2024-01-01", "2024-12-31"]
+  test_period: ["2025-01-01", "2025-12-31"]
+
+llm:
+  provider: "google"
+  model: "gemini-2.0-flash"
+  temperature: 0.8
+  max_tokens: 4096
+  batch_candidates: 40
+
+memory:
+  max_success_patterns: 50
+  max_failure_patterns: 100
+  max_insights: 30
+  consolidation_interval: 10
+
+phase2:
+  causal:
+    enabled: false
+    granger_max_lag: 5
+    granger_significance: 0.05
+    n_interventions: 3
+    intervention_magnitude: 2.0
+    intervention_ic_threshold: 0.5
+    robustness_threshold: 0.4
+    granger_weight: 0.4
+    intervention_weight: 0.6
+  regime:
+    enabled: false
+    lookback_window: 60
+    bull_return_threshold: 0.0
+    bear_return_threshold: 0.0
+    volatility_percentile: 0.7
+    min_regime_ic: 0.03
+    min_regimes_passing: 2
+  capacity:
+    enabled: false
+    base_capital_usd: 100000000.0
+    ic_degradation_limit: 0.20
+    net_icir_threshold: 0.3
+    sigma_annual: 0.25
+  significance:
+    enabled: false
+    bootstrap_n_samples: 1000
+    bootstrap_block_size: 20
+    fdr_level: 0.05
+    deflated_sharpe_enabled: true
+    min_deflated_sharpe: 0.0
+  debate:
+    enabled: false
+    num_specialists: 3
+    candidates_per_specialist: 15
+    enable_critic: true
+    top_k_after_critic: 40
+    critic_temperature: 0.3
+  auto_inventor:
+    enabled: false
+    invention_interval: 10
+    max_proposals_per_round: 5
+    min_ic_contribution: 0.03
+    store_dir: "./output/custom_operators"
+  helix:
+    enabled: false
+    enable_knowledge_graph: false
+    enable_embeddings: false
+    enable_canonicalization: true
+    forgetting_lambda: 0.95
+    forgetting_demotion_threshold: 20

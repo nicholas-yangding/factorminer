@@ -1,0 +1,68 @@
+{
+  "iterations": [
+    {
+      "iteration": 1,
+      "candidates_generated": 5,
+      "ic_passed": 5,
+      "correlation_passed": 5,
+      "admitted": 5,
+      "rejected": 0,
+      "replaced": 0,
+      "library_size": 5,
+      "best_ic": 0.285030303030303,
+      "mean_ic": 0.2634987012987013,
+      "elapsed_seconds": 0.11654281616210938,
+      "timestamp": 1771405061.188399,
+      "yield_rate": 1.0
+    }
+  ],
+  "factors": [
+    {
+      "expression": "Neg(CsRank(Delta($close, 5)))",
+      "ic": 0.22024675324675325,
+      "icir": 0.050849307784560566,
+      "max_correlation": 0.0,
+      "admitted": true,
+      "timestamp": 1771405061.1885881
+    },
+    {
+      "expression": "CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))",
+      "ic": 0.2614848484848485,
+      "icir": 0.0008583023863348376,
+      "max_correlation": 0.0,
+      "admitted": true,
+      "timestamp": 1771405061.1886048
+    },
+    {
+      "expression": "Div(Sub($high, $low), Add($high, $low))",
+      "ic": 0.27042424242424246,
+      "icir": -0.11835911964357007,
+      "max_correlation": 0.0,
+      "admitted": true,
+      "timestamp": 1771405061.1886132
+    },
+    {
+      "expression": "CsRank(Div(Sub($close, $vwap), $vwap))",
+      "ic": 0.28030735930735934,
+      "icir": -0.02848032909770418,
+      "max_correlation": 0.0,
+      "admitted": true,
+      "timestamp": 1771405061.188622
+    },
+    {
+      "expression": "Neg(Skew($returns, 20))",
+      "ic": 0.285030303030303,
+      "icir": 0.16051442952397005,
+      "max_correlation": 0.0,
+      "admitted": true,
+      "timestamp": 1771405061.188639
+    }
+  ],
+  "summary": {
+    "total_iterations": 1,
+    "total_candidates": 5,
+    "total_admitted": 5,
+    "overall_yield_rate": 1.0,
+    "final_library_size": 5
+  }
+}
