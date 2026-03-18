@@ -53,6 +53,9 @@ class BenchmarkManifest:
     test_period: list[str]
     freeze_top_k: int
     signal_failure_policy: str
+    default_target: str
+    target_stack: list[str]
+    primary_objective: str
     dataset_hashes: dict[str, str]
     artifact_paths: dict[str, str]
     warnings: list[str]
@@ -71,6 +74,7 @@ def _cfg_with_overrides(cfg, universe: str, mode: Optional[str] = None):
         cloned.benchmark.mode = mode
     if cloned.benchmark.mode == "paper":
         cloned.evaluation.signal_failure_policy = "reject"
+        cloned.research.enabled = False
         cloned.phase2.causal.enabled = False
         cloned.phase2.regime.enabled = False
         cloned.phase2.capacity.enabled = False
@@ -78,6 +82,8 @@ def _cfg_with_overrides(cfg, universe: str, mode: Optional[str] = None):
         cloned.phase2.debate.enabled = False
         cloned.phase2.auto_inventor.enabled = False
         cloned.phase2.helix.enabled = False
+    else:
+        cloned.research.enabled = True
     return cloned
 
 
@@ -594,6 +600,9 @@ def run_table1_benchmark(
             test_period=list(cfg.data.test_period),
             freeze_top_k=cfg.benchmark.freeze_top_k,
             signal_failure_policy="reject",
+            default_target=cfg.data.default_target,
+            target_stack=[target.get("name", "") for target in cfg.data.targets],
+            primary_objective=cfg.research.primary_objective,
             dataset_hashes=dataset_hashes,
             artifact_paths={"result": str(result_path)},
             warnings=[],

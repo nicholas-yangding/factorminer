@@ -12,6 +12,7 @@ import pandas as pd
 
 from factorminer.core.factor_library import Factor
 from factorminer.core.parser import try_parse
+from factorminer.data.tensor_builder import TargetSpec, compute_targets
 from factorminer.evaluation.metrics import (
     compute_factor_stats,
     compute_pairwise_correlation,
@@ -45,10 +46,18 @@ class DatasetSplit:
     indices: np.ndarray
     timestamps: np.ndarray
     returns: np.ndarray
+    target_returns: Dict[str, np.ndarray] = field(default_factory=dict)
+    default_target: str = "target"
 
     @property
     def size(self) -> int:
         return int(len(self.indices))
+
+    def get_target(self, name: str | None = None) -> np.ndarray:
+        target_name = name or self.default_target
+        if target_name in self.target_returns:
+            return self.target_returns[target_name]
+        return self.returns
 
 
 @dataclass
@@ -62,11 +71,20 @@ class EvaluationDataset:
     asset_ids: np.ndarray
     splits: Dict[str, DatasetSplit]
     processed_df: pd.DataFrame = field(repr=False)
+    target_panels: Dict[str, np.ndarray] = field(default_factory=dict)
+    target_specs: Dict[str, TargetSpec] = field(default_factory=dict)
+    default_target: str = "target"
 
     def get_split(self, name: str) -> DatasetSplit:
         if name not in self.splits:
             raise KeyError(f"Unknown split: {name}")
         return self.splits[name]
+
+    def get_target(self, name: str | None = None) -> np.ndarray:
+        target_name = name or self.default_target
+        if target_name in self.target_panels:
+            return self.target_panels[target_name]
+        return self.returns
 
 
 @dataclass
@@ -81,6 +99,9 @@ class FactorEvaluationArtifact:
     signals_full: Optional[np.ndarray] = None
     split_signals: Dict[str, np.ndarray] = field(default_factory=dict)
     split_stats: Dict[str, dict] = field(default_factory=dict)
+    target_stats: Dict[str, Dict[str, dict]] = field(default_factory=dict)
+    score_vector: Optional[dict] = None
+    research_metrics: Dict[str, float] = field(default_factory=dict)
     error: str = ""
 
     @property
@@ -95,15 +116,17 @@ def load_runtime_dataset(
     """Load raw market data into a canonical evaluation dataset."""
     from factorminer.data.preprocessor import preprocess
     from factorminer.data.tensor_builder import TensorConfig, build_tensor
-    from factorminer.data.tensor_builder import compute_target
 
     raw_df = raw_df.copy()
     raw_df["datetime"] = pd.to_datetime(raw_df["datetime"])
 
-    target_df = compute_target(raw_df)[["datetime", "asset_id", "target"]]
+    target_specs = _resolve_target_specs(cfg)
+    target_df = compute_targets(raw_df, target_specs)
+    target_columns = [spec.column_name for spec in target_specs]
+    merge_columns = ["datetime", "asset_id", *target_columns]
     processed_df = preprocess(raw_df)
     processed_df = processed_df.merge(
-        target_df,
+        target_df[merge_columns],
         on=["datetime", "asset_id"],
         how="left",
     )
@@ -114,12 +137,18 @@ def load_runtime_dataset(
         features=feature_columns,
         backend="numpy",
         dtype="float64",
-        target_column="target",
+        target_columns=target_columns,
+        default_target=_target_column_for_name(cfg.data.default_target, target_specs),
     )
     dataset = build_tensor(processed_df, tensor_cfg)
 
     data_tensor = np.asarray(dataset.data, dtype=np.float64)
     returns = np.asarray(dataset.target, dtype=np.float64)
+    target_panels = {
+        spec.name: np.asarray(dataset.targets[spec.column_name], dtype=np.float64)
+        for spec in target_specs
+        if spec.column_name in dataset.targets
+    }
     timestamps = pd.to_datetime(dataset.timestamps).to_numpy()
     asset_ids = np.asarray(dataset.asset_ids)
 
@@ -137,6 +166,8 @@ def load_runtime_dataset(
             "train",
             timestamps,
             returns,
+            target_panels,
+            cfg.data.default_target,
             start=cfg.data.train_period[0],
             end=cfg.data.train_period[1],
         ),
@@ -144,6 +175,8 @@ def load_runtime_dataset(
             "test",
             timestamps,
             returns,
+            target_panels,
+            cfg.data.default_target,
             start=cfg.data.test_period[0],
             end=cfg.data.test_period[1],
         ),
@@ -152,6 +185,8 @@ def load_runtime_dataset(
             indices=np.arange(len(timestamps)),
             timestamps=timestamps,
             returns=returns,
+            target_returns=target_panels,
+            default_target=cfg.data.default_target,
         ),
     }
 
@@ -170,6 +205,9 @@ def load_runtime_dataset(
         asset_ids=asset_ids,
         splits=splits,
         processed_df=processed_df,
+        target_panels=target_panels,
+        target_specs={spec.name: spec for spec in target_specs},
+        default_target=cfg.data.default_target,
     )
 
 
@@ -177,9 +215,12 @@ def evaluate_factors(
     factors: Sequence[Factor],
     dataset: EvaluationDataset,
     signal_failure_policy: str = "reject",
+    target_name: str | None = None,
 ) -> List[FactorEvaluationArtifact]:
     """Recompute factor signals and metrics across all dataset splits."""
     artifacts: List[FactorEvaluationArtifact] = []
+    active_target_name = target_name or dataset.default_target
+    active_returns = dataset.get_target(active_target_name)
 
     for factor in factors:
         artifact = FactorEvaluationArtifact(
@@ -202,7 +243,7 @@ def evaluate_factors(
             signals = compute_tree_signals(
                 tree,
                 dataset.data_dict,
-                dataset.returns.shape,
+                active_returns.shape,
                 signal_failure_policy=signal_failure_policy,
             )
         except Exception as exc:
@@ -220,10 +261,16 @@ def evaluate_factors(
         for split_name, split in dataset.splits.items():
             split_signals = artifact.signals_full[:, split.indices]
             artifact.split_signals[split_name] = split_signals
-            artifact.split_stats[split_name] = compute_factor_stats(
-                split_signals,
-                split.returns,
-            )
+            active_split_target = split.get_target(active_target_name)
+            active_stats = compute_factor_stats(split_signals, active_split_target)
+            artifact.split_stats[split_name] = active_stats
+            artifact.target_stats[split_name] = {}
+            for available_target_name, split_target in split.target_returns.items():
+                artifact.target_stats[split_name][available_target_name] = (
+                    active_stats
+                    if available_target_name == active_target_name
+                    else compute_factor_stats(split_signals, split_target)
+                )
 
         artifacts.append(artifact)
 
@@ -342,6 +389,8 @@ def _build_named_split(
     name: str,
     timestamps: np.ndarray,
     returns: np.ndarray,
+    target_panels: Dict[str, np.ndarray],
+    default_target: str,
     start: str,
     end: str,
 ) -> DatasetSplit:
@@ -353,7 +402,41 @@ def _build_named_split(
         indices=indices,
         timestamps=timestamps[indices],
         returns=returns[:, indices],
+        target_returns={
+            target_name: panel[:, indices]
+            for target_name, panel in target_panels.items()
+        },
+        default_target=default_target,
     )
+
+
+def _resolve_target_specs(cfg) -> List[TargetSpec]:
+    raw_targets = getattr(cfg.data, "targets", None) or [
+        {
+            "name": "paper",
+            "entry_delay_bars": 1,
+            "holding_bars": 1,
+            "price_pair": "open_to_close",
+            "return_transform": "simple",
+        }
+    ]
+    return [
+        TargetSpec(
+            name=str(target["name"]),
+            entry_delay_bars=int(target.get("entry_delay_bars", 0)),
+            holding_bars=int(target.get("holding_bars", 1)),
+            price_pair=str(target.get("price_pair", "open_to_close")),
+            return_transform=str(target.get("return_transform", "simple")),
+        )
+        for target in raw_targets
+    ]
+
+
+def _target_column_for_name(target_name: str, specs: Sequence[TargetSpec]) -> str:
+    for spec in specs:
+        if spec.name == target_name:
+            return spec.column_name
+    return "target"
 
 
 def _handle_signal_failure(

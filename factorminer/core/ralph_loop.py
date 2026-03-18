@@ -49,6 +49,11 @@ from factorminer.evaluation.metrics import (
     compute_ic_win_rate,
     compute_icir,
 )
+from factorminer.evaluation.research import (
+    build_score_vector,
+    compute_factor_geometry,
+    passes_research_admission,
+)
 from factorminer.evaluation.runtime import SignalComputationError, compute_tree_signals
 from factorminer.utils.logging import (
     IterationRecord,
@@ -141,6 +146,13 @@ class EvaluationResult:
     rejection_reason: str = ""
     stage_passed: int = 0  # 0=parse/IC fail, 1=IC pass, 2=corr pass, 3=dedup pass, 4=admitted
     signals: Optional[np.ndarray] = None
+    target_stats: Dict[str, dict] = field(default_factory=dict)
+    research_score: float = 0.0
+    research_lcb: float = 0.0
+    residual_ic: float = 0.0
+    projection_loss: float = 0.0
+    effective_rank_gain: float = 0.0
+    score_vector: Optional[dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -221,17 +233,26 @@ class ValidationPipeline:
         self,
         data_tensor: np.ndarray,
         returns: np.ndarray,
-        library: FactorLibrary,
+        target_panels: Optional[Dict[str, np.ndarray]] = None,
+        target_horizons: Optional[Dict[str, int]] = None,
+        library: Optional[FactorLibrary] = None,
         ic_threshold: float = 0.04,
         icir_threshold: float = 0.5,
         replacement_ic_min: float = 0.10,
         replacement_ic_ratio: float = 1.3,
         fast_screen_assets: int = 100,
         num_workers: int = 1,
+        research_config: Any = None,
+        benchmark_mode: str = "paper",
     ) -> None:
         self.data_tensor = data_tensor  # (M, T, F)
         self.returns = returns  # (M, T)
-        self.library = library
+        self.target_panels = target_panels or {"paper": returns}
+        self.target_horizons = target_horizons or {"paper": 1}
+        self.library = library or FactorLibrary(
+            correlation_threshold=0.5,
+            ic_threshold=ic_threshold,
+        )
         self.ic_threshold = ic_threshold
         self.icir_threshold = icir_threshold
         self.replacement_ic_min = replacement_ic_min
@@ -239,6 +260,8 @@ class ValidationPipeline:
         self.fast_screen_assets = fast_screen_assets
         self.num_workers = num_workers
         self.signal_failure_policy = "reject"
+        self.research_config = research_config
+        self.benchmark_mode = benchmark_mode
 
         # Pre-compute the fast-screen asset subset indices
         M = returns.shape[0]
@@ -311,15 +334,72 @@ class ValidationPipeline:
         result.ic_mean = stats["ic_abs_mean"]
         result.icir = stats["icir"]
         result.ic_win_rate = stats["ic_win_rate"]
+        result.target_stats = {"paper": stats}
+
+        if self.target_panels:
+            for target_name, target_returns in self.target_panels.items():
+                if target_name == "paper":
+                    continue
+                result.target_stats[target_name] = compute_factor_stats(signals, target_returns)
+
+        score_vector_obj = None
+        if self._research_enabled():
+            library_signals = [factor.signals for factor in self.library.list_factors() if factor.signals is not None]
+            geometry = compute_factor_geometry(signals, self.returns, library_signals)
+            score_vector_obj = build_score_vector(
+                result.target_stats,
+                self.target_horizons,
+                self.research_config,
+                geometry,
+            )
+            result.score_vector = score_vector_obj.to_dict()
+            result.research_score = score_vector_obj.primary_score
+            result.research_lcb = score_vector_obj.lower_confidence_bound
+            result.residual_ic = score_vector_obj.geometry.residual_ic
+            result.projection_loss = score_vector_obj.geometry.projection_loss
+            result.effective_rank_gain = score_vector_obj.geometry.effective_rank_gain
 
         # Stage 1 gate: IC threshold (full data)
-        if result.ic_mean < self.ic_threshold:
+        quality_gate = result.ic_mean
+        quality_label = "IC"
+        if self._research_enabled():
+            quality_gate = result.research_score
+            quality_label = "Research score"
+
+        if quality_gate < self.ic_threshold:
             result.rejection_reason = (
-                f"IC {result.ic_mean:.4f} < threshold {self.ic_threshold}"
+                f"{quality_label} {quality_gate:.4f} < threshold {self.ic_threshold}"
+            )
+            result.stage_passed = 0
+            return result
+        if result.icir < self.icir_threshold:
+            result.rejection_reason = (
+                f"ICIR {result.icir:.4f} < threshold {self.icir_threshold}"
             )
             result.stage_passed = 0
             return result
         result.stage_passed = 1
+
+        if self._research_enabled():
+            admitted, reason = passes_research_admission(
+                score_vector_obj,
+                self.research_config,
+                self.library.correlation_threshold,
+            )
+            result.max_correlation = result.score_vector["geometry"]["max_abs_correlation"]
+            if admitted:
+                result.admitted = True
+                result.stage_passed = 3
+                return result
+            result.stage_passed = 2
+            result.rejection_reason = reason
+            replace_id, replace_reason = self._research_replacement(result)
+            if replace_id is not None:
+                result.admitted = True
+                result.replaced = replace_id
+                result.rejection_reason = replace_reason
+                result.stage_passed = 3
+            return result
 
         # Stage 2: Correlation check against library (admission)
         admitted, reason = self.library.check_admission(
@@ -359,6 +439,37 @@ class ValidationPipeline:
                 signals
             )
         return result
+
+    def _research_enabled(self) -> bool:
+        return bool(
+            self.research_config is not None
+            and getattr(self.research_config, "enabled", False)
+            and self.benchmark_mode == "research"
+        )
+
+    def _research_replacement(self, result: EvaluationResult) -> tuple[Optional[int], str]:
+        if result.score_vector is None or self.library.size == 0:
+            return None, result.rejection_reason
+
+        conflicting: list[tuple[int, float]] = []
+        for factor in self.library.list_factors():
+            if factor.signals is None:
+                continue
+            corr = self.library._compute_correlation_vectorized(result.signals, factor.signals)
+            if corr >= self.library.correlation_threshold:
+                conflicting.append((factor.id, corr))
+        if len(conflicting) != 1:
+            return None, result.rejection_reason
+
+        target_id, _ = conflicting[0]
+        target_factor = self.library.get_factor(target_id)
+        target_score = float(target_factor.research_metrics.get("primary_score", target_factor.ic_mean))
+        if result.research_score < max(self.replacement_ic_min, self.replacement_ic_ratio * target_score):
+            return None, (
+                f"Research replacement score {result.research_score:.4f} "
+                f"not strong enough to replace factor {target_id} ({target_score:.4f})"
+            )
+        return target_id, f"Research replacement over factor {target_id}"
 
     def evaluate_batch(
         self, candidates: List[Tuple[str, str]]
@@ -432,7 +543,9 @@ class ValidationPipeline:
         # Greedy dedup: iterate in order of descending IC, keep non-correlated
         admitted_by_ic = sorted(
             admitted_indices,
-            key=lambda i: results[i].ic_mean,
+            key=lambda i: (
+                results[i].research_score if self._research_enabled() else results[i].ic_mean
+            ),
             reverse=True,
         )
 
@@ -619,6 +732,8 @@ class RalphLoop:
         self.pipeline = ValidationPipeline(
             data_tensor=data_tensor,
             returns=returns,
+            target_panels=getattr(config, "target_panels", None),
+            target_horizons=getattr(config, "target_horizons", None),
             library=self.library,
             ic_threshold=getattr(config, "ic_threshold", 0.04),
             icir_threshold=getattr(config, "icir_threshold", 0.5),
@@ -626,6 +741,8 @@ class RalphLoop:
             replacement_ic_ratio=getattr(config, "replacement_ic_ratio", 1.3),
             fast_screen_assets=getattr(config, "fast_screen_assets", 100),
             num_workers=getattr(config, "num_workers", 1),
+            research_config=getattr(config, "research", None),
+            benchmark_mode=getattr(config, "benchmark_mode", "paper"),
         )
         self.pipeline.signal_failure_policy = getattr(
             config, "signal_failure_policy", "reject"
@@ -894,6 +1011,7 @@ class RalphLoop:
                     max_correlation=result.max_correlation,
                     batch_number=self.iteration,
                     signals=result.signals,
+                    research_metrics=result.score_vector or {},
                 )
                 try:
                     self.library.replace_factor(old_id, new_factor)
@@ -919,6 +1037,7 @@ class RalphLoop:
                     max_correlation=result.max_correlation,
                     batch_number=self.iteration,
                     signals=result.signals,
+                    research_metrics=result.score_vector or {},
                 )
                 self.library.admit_factor(factor)
                 admitted.append(result)

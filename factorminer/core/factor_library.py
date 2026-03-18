@@ -37,6 +37,7 @@ class Factor:
     batch_number: int  # Which mining batch admitted this factor
     admission_date: str = ""
     signals: Optional[np.ndarray] = field(default=None, repr=False)  # (M, T)
+    research_metrics: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.admission_date:
@@ -55,6 +56,7 @@ class Factor:
             "max_correlation": self.max_correlation,
             "batch_number": self.batch_number,
             "admission_date": self.admission_date,
+            "research_metrics": self.research_metrics,
         }
 
     @classmethod
@@ -71,6 +73,7 @@ class Factor:
             max_correlation=d["max_correlation"],
             batch_number=d["batch_number"],
             admission_date=d.get("admission_date", ""),
+            research_metrics=d.get("research_metrics", {}),
         )
 
 

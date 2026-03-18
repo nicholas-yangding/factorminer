@@ -16,6 +16,18 @@ benchmark:
     - "factor_miner"
     - "factor_miner_no_memory"
 
+data:
+  targets:
+    - name: "paper"
+      entry_delay_bars: 1
+      holding_bars: 1
+      price_pair: "open_to_close"
+      return_transform: "simple"
+  default_target: "paper"
+
+research:
+  enabled: false
+
 phase2:
   causal:
     enabled: false

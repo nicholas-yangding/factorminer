@@ -1,27 +1,7 @@
 {
   "correlation_threshold": 0.5,
   "ic_threshold": 0.04,
-  "next_id": 2,
-  "factors": [
-    {
-      "id": 1,
-      "name": "price_range_ratio",
-      "formula": "Div(Sub($high, $low), Add($high, $low))",
-      "category": "Other",
-      "ic_mean": 0.2486060606060606,
-      "icir": -0.3678513450563207,
-      "ic_win_rate": 0.24,
-      "max_correlation": 0.0,
-      "batch_number": 1,
-      "admission_date": "2026-03-18 14:03:14"
-    }
-  ],
-  "correlation_matrix": [
-    [
-      0.0
-    ]
-  ],
-  "id_to_index": {
-    "1": 0
-  }
+  "next_id": 1,
+  "factors": [],
+  "id_to_index": {}
 }

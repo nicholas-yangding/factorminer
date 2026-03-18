@@ -1219,3 +1219,39 @@
 2026-03-18 14:03:14,753 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
 2026-03-18 14:03:14,758 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
 2026-03-18 14:03:14,758 INFO Removed factor 1 'factor_a' from library
+2026-03-18 18:39:43,576 INFO ============================================================
+2026-03-18 18:39:43,576 INFO FactorMiner session started
+2026-03-18 18:39:43,576 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 18:39:43,576 INFO ============================================================
+2026-03-18 18:39:43,600 INFO Iter   1 | gen=5 ic_ok=0 corr_ok=0 +0 -5 | lib=0 yield=0.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-18 18:39:43,600 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-18 18:39:43,601 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-18 18:39:43,601 INFO Session saved to output/checkpoint
+2026-03-18 18:39:43,602 INFO ============================================================
+2026-03-18 18:39:43,602 INFO Session complete
+2026-03-18 18:39:43,602 INFO Library: 0 factors | 1 iterations | 0s total
+2026-03-18 18:39:43,602 INFO Candidates: 5 generated, 0 admitted (0.0% yield)
+2026-03-18 18:39:43,602 INFO ============================================================
+2026-03-18 18:39:43,602 INFO Session log exported to output/session_log.json
+2026-03-18 18:39:43,603 INFO Factor library exported to output/factor_library.json
+2026-03-18 18:39:43,614 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-18 18:39:43,617 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-18 18:39:43,617 INFO Removed factor 1 'factor_a' from library
+2026-03-18 18:40:59,118 INFO ============================================================
+2026-03-18 18:40:59,118 INFO FactorMiner session started
+2026-03-18 18:40:59,118 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 18:40:59,118 INFO ============================================================
+2026-03-18 18:40:59,131 INFO Iter   1 | gen=5 ic_ok=0 corr_ok=0 +0 -5 | lib=0 yield=0.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-18 18:40:59,132 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-18 18:40:59,132 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-18 18:40:59,132 INFO Session saved to output/checkpoint
+2026-03-18 18:40:59,133 INFO ============================================================
+2026-03-18 18:40:59,133 INFO Session complete
+2026-03-18 18:40:59,133 INFO Library: 0 factors | 1 iterations | 0s total
+2026-03-18 18:40:59,133 INFO Candidates: 5 generated, 0 admitted (0.0% yield)
+2026-03-18 18:40:59,133 INFO ============================================================
+2026-03-18 18:40:59,133 INFO Session log exported to output/session_log.json
+2026-03-18 18:40:59,133 INFO Factor library exported to output/factor_library.json
+2026-03-18 18:40:59,144 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-18 18:40:59,148 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-18 18:40:59,148 INFO Removed factor 1 'factor_a' from library

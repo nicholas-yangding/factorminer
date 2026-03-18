@@ -259,6 +259,28 @@ The repo now ships explicit benchmark/research profiles:
 - `combine --fit-period ... --eval-period ...`
 - `visualize --period train|test|both`
 
+### Research mode
+
+The research lane now supports named multi-horizon targets through `data.targets` plus a separate `research` section.
+
+Key knobs:
+
+- `data.targets`: named target definitions with `entry_delay_bars`, `holding_bars`, `price_pair`, and `return_transform`
+- `data.default_target`: scalar target used by benchmark-facing summaries
+- `research.primary_objective`: `single_horizon`, `weighted_multi_horizon`, `pareto_multi_horizon`, or `net_ir`
+- `research.horizon_weights`: explicit per-target weights for research-mode scoring
+- `research.uncertainty.*`: bootstrap/shrinkage controls
+- `research.admission.*`: residual-IC, effective-rank, and turnover penalty controls
+- `research.selection.models`: rolling research model suite for `combine`
+
+`factorminer/configs/helix_research.yaml` enables the default multi-horizon stack:
+
+- `h1_open_to_close`
+- `h3_open_to_close`
+- `h6_open_to_close`
+- `h1_close_to_close`
+- `h5_close_to_close`
+
 ## Data Format
 
 Input data is expected to contain market bars with at least:

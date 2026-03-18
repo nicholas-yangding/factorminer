@@ -1,14 +1,7 @@
 {
   "state": {
-    "library_size": 1,
-    "recent_admissions": [
-      {
-        "factor_id": "price_range_ratio",
-        "formula": "Div(Sub($high, $low), Add($high, $low))",
-        "ic": 0.2486060606060606,
-        "batch": 1
-      }
-    ],
+    "library_size": 0,
+    "recent_admissions": [],
     "recent_rejections": [
       {
         "factor_id": "momentum_reversal",
@@ -21,6 +14,13 @@
         "factor_id": "volume_surprise",
         "formula": "CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))",
         "reason": "Signal computation error: Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': \"Feature '$volume' not found in data. Available: ['$high', '$low', '$open']\"",
+        "max_correlation": 0.0,
+        "batch": 1
+      },
+      {
+        "factor_id": "price_range_ratio",
+        "formula": "Div(Sub($high, $low), Add($high, $low))",
+        "reason": "ICIR -0.3679 < threshold 0.5",
         "max_correlation": 0.0,
         "batch": 1
       },
@@ -45,25 +45,20 @@
     "admission_log": [
       {
         "batch": 1,
-        "admitted": 1,
-        "rejected": 4,
-        "admission_rate": 0.2
+        "admitted": 0,
+        "rejected": 5,
+        "admission_rate": 0.0
       }
     ]
   },
-  "success_patterns": [
+  "success_patterns": [],
+  "forbidden_directions": [],
+  "insights": [
     {
-      "name": "Novel: Div+Sub+Add",
-      "description": "Pattern derived from admitted factor with IC=0.2486",
-      "template": "Div(Sub($high, $low), Add($high, $low))",
-      "success_rate": "Low",
-      "example_factors": [
-        "price_range_ratio"
-      ],
-      "occurrence_count": 0
+      "insight": "Current direction is exhausted, need to pivot to new operator combinations",
+      "evidence": "Batch 1: only 0/5 admitted (0%)",
+      "batch_source": 1
     }
   ],
-  "forbidden_directions": [],
-  "insights": [],
   "version": 1
 }

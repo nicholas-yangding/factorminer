@@ -79,6 +79,14 @@ from factorminer.evaluation.significance import (
     SignificanceConfig,
     check_significance,
 )
+from factorminer.evaluation.research import (
+    FactorGeometryDiagnostics,
+    FactorScoreVector,
+    build_score_vector,
+    compute_factor_geometry,
+    passes_research_admission,
+    run_research_model_suite,
+)
 
 __all__ = [
     # metrics
@@ -151,4 +159,11 @@ __all__ = [
     "FDRResult",
     "SignificanceConfig",
     "check_significance",
+    # research
+    "FactorGeometryDiagnostics",
+    "FactorScoreVector",
+    "compute_factor_geometry",
+    "build_score_vector",
+    "passes_research_admission",
+    "run_research_model_suite",
 ]

@@ -191,7 +191,7 @@ def _build_core_mining_config(cfg, output_dir: Path, mock: bool = False):
         "synthetic" if mock else cfg.evaluation.signal_failure_policy
     )
 
-    return CoreMiningConfig(
+    mining_cfg = CoreMiningConfig(
         target_library_size=cfg.mining.target_library_size,
         batch_size=cfg.mining.batch_size,
         max_iterations=cfg.mining.max_iterations,
@@ -207,6 +207,21 @@ def _build_core_mining_config(cfg, output_dir: Path, mock: bool = False):
         gpu_device=cfg.evaluation.gpu_device,
         signal_failure_policy=signal_failure_policy,
     )
+    mining_cfg.research = getattr(cfg, "research", None)
+    benchmark_cfg = getattr(cfg, "benchmark", None)
+    mining_cfg.benchmark_mode = getattr(benchmark_cfg, "mode", "paper")
+    mining_cfg.target_panels = None
+    mining_cfg.target_horizons = None
+    return mining_cfg
+
+
+def _attach_runtime_targets(mining_config, dataset) -> None:
+    """Attach multi-horizon runtime metadata for research-mode mining."""
+    mining_config.target_panels = dataset.target_panels
+    mining_config.target_horizons = {
+        name: max(getattr(spec, "holding_bars", 1), 1)
+        for name, spec in dataset.target_specs.items()
+    }
 
 
 def _save_result_library(library, output_dir: Path) -> Path:
@@ -621,18 +636,18 @@ def mine(
 
     # Load data
     try:
-        df = _load_data(cfg, data_path, mock)
+        dataset = _load_runtime_dataset_for_analysis(cfg, data_path, mock)
     except Exception as e:
         click.echo(f"Error loading data: {e}")
         raise click.Abort()
 
-    n_assets = df["asset_id"].nunique()
-    n_periods = df["datetime"].nunique()
-    click.echo(f"  Data loaded: {n_assets} assets x {n_periods} periods ({len(df)} rows)")
-
-    # Prepare numpy arrays
+    click.echo(
+        f"  Data loaded: {len(dataset.asset_ids)} assets x "
+        f"{len(dataset.timestamps)} periods"
+    )
     click.echo("  Preparing data tensors...")
-    data_tensor, returns = _prepare_data_arrays(df)
+    data_tensor = dataset.data_tensor
+    returns = dataset.returns
 
     # Create LLM provider
     llm_provider = _create_llm_provider(cfg, mock)
@@ -645,6 +660,7 @@ def mine(
 
     # Create and configure MiningConfig for the RalphLoop
     mining_config = _build_core_mining_config(cfg, output_dir, mock=mock)
+    _attach_runtime_targets(mining_config, dataset)
 
     # Create and run the Ralph Loop
     from factorminer.core.ralph_loop import RalphLoop
@@ -950,6 +966,33 @@ def combine(
         except Exception as e:
             click.echo(f"    Error: {e}")
             logger.exception("Combination method %s failed", m)
+
+    if cfg.research.enabled and cfg.benchmark.mode == "research":
+        click.echo("\n  Research model suite:")
+        try:
+            from factorminer.evaluation.research import run_research_model_suite
+
+            research_reports = run_research_model_suite(
+                eval_factor_signals,
+                eval_returns_tn,
+                cfg.research,
+            )
+            research_path = output_dir / "research_model_suite.json"
+            research_path.write_text(json.dumps(research_reports, indent=2))
+            for model_name, report in research_reports.items():
+                if not report.get("available", True):
+                    click.echo(f"    {model_name}: unavailable ({report.get('error', 'unknown error')})")
+                    continue
+                click.echo(
+                    f"    {model_name}: "
+                    f"net IR={report.get('mean_test_net_ir', 0.0):.4f}, "
+                    f"ICIR={report.get('mean_test_icir', 0.0):.4f}, "
+                    f"stability={report.get('selection_stability', 0.0):.3f}"
+                )
+            click.echo(f"    Saved: {research_path}")
+        except Exception as e:
+            click.echo(f"    Research suite error: {e}")
+            logger.exception("Research model suite failed")
 
     click.echo("\n" + "=" * 60)
 
@@ -1437,17 +1480,14 @@ def helix(
         click.echo(f"  Resuming from: {resume}")
 
     try:
-        df = _load_data(cfg, data_path, mock)
+        dataset = _load_runtime_dataset_for_analysis(cfg, data_path, mock)
     except Exception as e:
         click.echo(f"Error loading data: {e}")
         raise click.Abort()
 
-    n_assets = df["asset_id"].nunique()
-    n_periods = df["datetime"].nunique()
-    click.echo(f"  Data loaded: {n_assets} assets x {n_periods} periods ({len(df)} rows)")
-
     click.echo("  Preparing data tensors...")
-    data_tensor, returns = _prepare_data_arrays(df)
+    data_tensor = dataset.data_tensor
+    returns = dataset.returns
     llm_provider = _create_llm_provider(cfg, mock)
 
     library = None
@@ -1455,6 +1495,7 @@ def helix(
         library = _load_library_from_path(resume)
 
     mining_config = _build_core_mining_config(cfg, output_dir, mock=mock)
+    _attach_runtime_targets(mining_config, dataset)
     phase2_configs = _build_phase2_runtime_configs(cfg)
     volume = _extract_capacity_volume(data_tensor) if cfg.phase2.capacity.enabled else None
 

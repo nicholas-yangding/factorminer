@@ -86,6 +86,18 @@ class DataConfig:
     test_period: list[str] = field(
         default_factory=lambda: ["2025-01-01", "2025-12-31"]
     )
+    targets: list[dict[str, Any]] = field(
+        default_factory=lambda: [
+            {
+                "name": "paper",
+                "entry_delay_bars": 1,
+                "holding_bars": 1,
+                "price_pair": "open_to_close",
+                "return_transform": "simple",
+            }
+        ]
+    )
+    default_target: str = "paper"
 
     def validate(self) -> None:
         if len(self.train_period) != 2:
@@ -98,6 +110,36 @@ class DataConfig:
             raise ValueError("test_period start must be before end")
         if not self.features:
             raise ValueError("features must not be empty")
+        if not self.targets:
+            raise ValueError("data.targets must not be empty")
+        target_names: list[str] = []
+        for target in self.targets:
+            if not isinstance(target, dict):
+                raise ValueError("each data.targets entry must be a mapping")
+            name = str(target.get("name", "")).strip()
+            if not name:
+                raise ValueError("each data.targets entry must define a non-empty name")
+            target_names.append(name)
+            if int(target.get("entry_delay_bars", 0)) < 0:
+                raise ValueError("entry_delay_bars must be >= 0")
+            if int(target.get("holding_bars", 0)) < 0:
+                raise ValueError("holding_bars must be >= 0")
+            if target.get("price_pair") not in (
+                "open_to_close",
+                "close_to_close",
+                "open_to_open",
+                "close_to_open",
+            ):
+                raise ValueError(
+                    "price_pair must be one of: open_to_close, close_to_close, "
+                    "open_to_open, close_to_open"
+                )
+            if target.get("return_transform", "simple") not in ("simple", "log"):
+                raise ValueError("return_transform must be one of: simple, log")
+        if len(set(target_names)) != len(target_names):
+            raise ValueError("data.targets names must be unique")
+        if self.default_target not in set(target_names):
+            raise ValueError("data.default_target must match one of data.targets[*].name")
 
 
 @dataclass
@@ -375,6 +417,157 @@ class BenchmarkConfig:
 
 
 @dataclass
+class ResearchUncertaintyConfig:
+    """Uncertainty controls for multi-horizon research scoring."""
+
+    bootstrap_samples: int = 200
+    block_size: int = 20
+    shrinkage_strength: float = 1.0
+    lcb_zscore: float = 1.0
+    fdr_alpha: float = 0.05
+
+    def validate(self) -> None:
+        if self.bootstrap_samples < 10:
+            raise ValueError("research.uncertainty.bootstrap_samples must be >= 10")
+        if self.block_size < 1:
+            raise ValueError("research.uncertainty.block_size must be >= 1")
+        if self.shrinkage_strength < 0.0:
+            raise ValueError("research.uncertainty.shrinkage_strength must be >= 0")
+        if self.lcb_zscore < 0.0:
+            raise ValueError("research.uncertainty.lcb_zscore must be >= 0")
+        if not (0.0 < self.fdr_alpha < 1.0):
+            raise ValueError("research.uncertainty.fdr_alpha must be in (0, 1)")
+
+
+@dataclass
+class ResearchAdmissionConfig:
+    """Research-mode admission controls."""
+
+    use_residual_ic: bool = True
+    use_effective_rank_gain: bool = True
+    turnover_penalty: float = 0.05
+    redundancy_penalty: float = 0.20
+    min_score: float = 0.04
+    min_lcb: float = 0.0
+    min_span_gain: float = 0.05
+    min_effective_rank_gain: float = 0.0
+
+    def validate(self) -> None:
+        if self.turnover_penalty < 0.0:
+            raise ValueError("research.admission.turnover_penalty must be >= 0")
+        if self.redundancy_penalty < 0.0:
+            raise ValueError("research.admission.redundancy_penalty must be >= 0")
+        if self.min_score < 0.0:
+            raise ValueError("research.admission.min_score must be >= 0")
+        if self.min_span_gain < 0.0:
+            raise ValueError("research.admission.min_span_gain must be >= 0")
+
+
+@dataclass
+class ResearchSelectionConfig:
+    """Research-mode model configuration."""
+
+    models: list[str] = field(
+        default_factory=lambda: ["ridge", "elastic_net", "lasso", "xgboost"]
+    )
+    rolling_train_window: int = 80
+    rolling_test_window: int = 20
+    rolling_step: int = 20
+
+    def validate(self) -> None:
+        allowed = {
+            "ridge",
+            "elastic_net",
+            "lasso",
+            "stepwise",
+            "xgboost",
+        }
+        if not self.models:
+            raise ValueError("research.selection.models must not be empty")
+        if any(model not in allowed for model in self.models):
+            raise ValueError(
+                "research.selection.models entries must be one of: "
+                "ridge, elastic_net, lasso, stepwise, xgboost"
+            )
+        if self.rolling_train_window < 5:
+            raise ValueError("research.selection.rolling_train_window must be >= 5")
+        if self.rolling_test_window < 1:
+            raise ValueError("research.selection.rolling_test_window must be >= 1")
+        if self.rolling_step < 1:
+            raise ValueError("research.selection.rolling_step must be >= 1")
+
+
+@dataclass
+class ResearchRegimesConfig:
+    """Research-mode regime diagnostics."""
+
+    enabled: bool = False
+    definition: str = "return_volatility_liquidity"
+
+    def validate(self) -> None:
+        if self.definition not in (
+            "return_volatility",
+            "return_volatility_liquidity",
+        ):
+            raise ValueError(
+                "research.regimes.definition must be one of: "
+                "return_volatility, return_volatility_liquidity"
+            )
+
+
+@dataclass
+class ResearchExecutionConfig:
+    """Execution-aware research scoring controls."""
+
+    cost_model: str = "linear_bps"
+    cost_bps: float = 4.0
+
+    def validate(self) -> None:
+        if self.cost_model not in ("linear_bps",):
+            raise ValueError("research.execution.cost_model must be 'linear_bps'")
+        if self.cost_bps < 0.0:
+            raise ValueError("research.execution.cost_bps must be >= 0")
+
+
+@dataclass
+class ResearchConfig:
+    """Research-first multi-horizon scoring configuration."""
+
+    enabled: bool = False
+    primary_objective: str = "weighted_multi_horizon"
+    target_aggregation: str = "weighted"
+    horizon_weights: dict[str, float] = field(default_factory=dict)
+    uncertainty: ResearchUncertaintyConfig = field(default_factory=ResearchUncertaintyConfig)
+    admission: ResearchAdmissionConfig = field(default_factory=ResearchAdmissionConfig)
+    selection: ResearchSelectionConfig = field(default_factory=ResearchSelectionConfig)
+    regimes: ResearchRegimesConfig = field(default_factory=ResearchRegimesConfig)
+    execution: ResearchExecutionConfig = field(default_factory=ResearchExecutionConfig)
+
+    def validate(self) -> None:
+        if self.primary_objective not in (
+            "single_horizon",
+            "weighted_multi_horizon",
+            "pareto_multi_horizon",
+            "net_ir",
+        ):
+            raise ValueError(
+                "research.primary_objective must be one of: "
+                "single_horizon, weighted_multi_horizon, pareto_multi_horizon, net_ir"
+            )
+        if self.target_aggregation not in ("weighted", "pareto"):
+            raise ValueError(
+                "research.target_aggregation must be one of: weighted, pareto"
+            )
+        if any(weight < 0.0 for weight in self.horizon_weights.values()):
+            raise ValueError("research.horizon_weights values must be >= 0")
+        self.uncertainty.validate()
+        self.admission.validate()
+        self.selection.validate()
+        self.regimes.validate()
+        self.execution.validate()
+
+
+@dataclass
 class Config:
     """Top-level configuration aggregating all sub-configs."""
 
@@ -385,6 +578,7 @@ class Config:
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     phase2: Phase2Config = field(default_factory=Phase2Config)
     benchmark: BenchmarkConfig = field(default_factory=BenchmarkConfig)
+    research: ResearchConfig = field(default_factory=ResearchConfig)
 
     def validate(self) -> None:
         """Validate all sub-configurations."""
@@ -395,6 +589,7 @@ class Config:
         self.memory.validate()
         self.phase2.validate()
         self.benchmark.validate()
+        self.research.validate()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize config to a plain dictionary."""
@@ -416,6 +611,7 @@ _SECTION_MAP: dict[str, type] = {
     "memory": MemoryConfig,
     "phase2": Phase2Config,
     "benchmark": BenchmarkConfig,
+    "research": ResearchConfig,
 }
 
 _PHASE2_SECTION_MAP: dict[str, type] = {
@@ -426,6 +622,14 @@ _PHASE2_SECTION_MAP: dict[str, type] = {
     "debate": DebateConfig,
     "auto_inventor": AutoInventorConfig,
     "helix": HelixConfig,
+}
+
+_RESEARCH_SECTION_MAP: dict[str, type] = {
+    "uncertainty": ResearchUncertaintyConfig,
+    "admission": ResearchAdmissionConfig,
+    "selection": ResearchSelectionConfig,
+    "regimes": ResearchRegimesConfig,
+    "execution": ResearchExecutionConfig,
 }
 
 
@@ -470,6 +674,24 @@ def _build_phase2(raw: dict[str, Any]) -> Phase2Config:
     return Phase2Config(**subs)
 
 
+def _build_research(raw: dict[str, Any]) -> ResearchConfig:
+    """Build ResearchConfig with nested sub-config dataclasses."""
+    subs = {}
+    valid_fields = {f.name for f in ResearchConfig.__dataclass_fields__.values()}
+    for key, value in raw.items():
+        if key in valid_fields and key not in _RESEARCH_SECTION_MAP:
+            subs[key] = copy.deepcopy(value)
+
+    for sub_name, sub_cls in _RESEARCH_SECTION_MAP.items():
+        sub_raw = raw.get(sub_name, {})
+        if isinstance(sub_raw, dict):
+            subs[sub_name] = _build_section(sub_cls, sub_raw)
+        else:
+            subs[sub_name] = sub_cls()
+
+    return ResearchConfig(**subs)
+
+
 def load_config(
     config_path: str | Path | None = None,
     overrides: dict[str, Any] | None = None,
@@ -509,6 +731,8 @@ def load_config(
         raw = merged.get(section_name, {})
         if section_name == "phase2":
             sections[section_name] = _build_phase2(raw)
+        elif section_name == "research":
+            sections[section_name] = _build_research(raw)
         else:
             sections[section_name] = _build_section(section_cls, raw)
 

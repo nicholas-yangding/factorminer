@@ -23,6 +23,21 @@ DEFAULT_FEATURES: list[str] = [
 Backend = Literal["numpy", "torch", "cupy"]
 
 
+@dataclass(frozen=True)
+class TargetSpec:
+    """Definition of one aligned forward-return target."""
+
+    name: str
+    entry_delay_bars: int
+    holding_bars: int
+    price_pair: str = "open_to_close"
+    return_transform: str = "simple"
+
+    @property
+    def column_name(self) -> str:
+        return "target" if self.name == "paper" else f"target_{self.name}"
+
+
 @dataclass
 class TensorConfig:
     """Configuration for tensor construction.
@@ -57,6 +72,8 @@ class TensorConfig:
     m_fast: Optional[int] = None
     seed: int = 42
     target_column: str = "target"
+    target_columns: list[str] = field(default_factory=list)
+    default_target: str = "target"
 
 
 # ---------------------------------------------------------------------------
@@ -72,12 +89,81 @@ def compute_target(df: pd.DataFrame) -> pd.DataFrame:
 
     The last bar of each asset has a NaN target.
     """
+    return compute_targets(
+        df,
+        [
+            TargetSpec(
+                name="paper",
+                entry_delay_bars=1,
+                holding_bars=1,
+                price_pair="open_to_close",
+                return_transform="simple",
+            )
+        ],
+    )
+
+
+def compute_targets(
+    df: pd.DataFrame,
+    target_specs: Sequence[TargetSpec],
+) -> pd.DataFrame:
+    """Compute one or more named forward-return targets on the same panel."""
     df = df.sort_values(["asset_id", "datetime"]).copy()
-    df["_next_open"] = df.groupby("asset_id")["open"].shift(-1)
-    df["_next_close"] = df.groupby("asset_id")["close"].shift(-1)
-    df["target"] = df["_next_close"] / df["_next_open"] - 1
-    df = df.drop(columns=["_next_open", "_next_close"])
+
+    for spec in target_specs:
+        start_col, end_col, start_offset, end_offset = _resolve_target_offsets(spec)
+        start_values = df.groupby("asset_id")[start_col].shift(-start_offset)
+        end_values = df.groupby("asset_id")[end_col].shift(-end_offset)
+        if spec.return_transform == "log":
+            df[spec.column_name] = np.log(end_values / start_values)
+        else:
+            df[spec.column_name] = end_values / start_values - 1.0
+
     return df
+
+
+def _resolve_target_offsets(spec: TargetSpec) -> tuple[str, str, int, int]:
+    """Map a target spec to start/end price columns and offsets."""
+    if spec.entry_delay_bars < 0 or spec.holding_bars < 0:
+        raise ValueError("TargetSpec entry_delay_bars and holding_bars must be >= 0")
+
+    if spec.price_pair == "open_to_close":
+        if spec.holding_bars < 1:
+            raise ValueError("open_to_close targets require holding_bars >= 1")
+        return (
+            "open",
+            "close",
+            spec.entry_delay_bars,
+            spec.entry_delay_bars + spec.holding_bars - 1,
+        )
+    if spec.price_pair == "close_to_close":
+        if spec.holding_bars < 1:
+            raise ValueError("close_to_close targets require holding_bars >= 1")
+        return (
+            "close",
+            "close",
+            spec.entry_delay_bars,
+            spec.entry_delay_bars + spec.holding_bars,
+        )
+    if spec.price_pair == "open_to_open":
+        if spec.holding_bars < 1:
+            raise ValueError("open_to_open targets require holding_bars >= 1")
+        return (
+            "open",
+            "open",
+            spec.entry_delay_bars,
+            spec.entry_delay_bars + spec.holding_bars,
+        )
+    if spec.price_pair == "close_to_open":
+        if spec.holding_bars < 1:
+            raise ValueError("close_to_open targets require holding_bars >= 1")
+        return (
+            "close",
+            "open",
+            spec.entry_delay_bars,
+            spec.entry_delay_bars + spec.holding_bars,
+        )
+    raise ValueError(f"Unknown TargetSpec price_pair: {spec.price_pair}")
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +257,8 @@ class TensorDataset:
     asset_ids: np.ndarray
     timestamps: np.ndarray
     feature_names: list[str]
+    targets: dict[str, object] = field(default_factory=dict)
+    default_target: str = "target"
 
 
 def build_tensor(
@@ -214,13 +302,29 @@ def build_tensor(
     data_np = _build_3d(df, asset_ids, timestamps, config.features)
 
     # Target
+    resolved_target_columns = list(config.target_columns or [config.target_column])
+    target_arrays_np: dict[str, np.ndarray] = {}
+    for target_column in resolved_target_columns:
+        if target_column not in df.columns:
+            continue
+        target_np = _build_3d(df, asset_ids, timestamps, [target_column])
+        target_arrays_np[target_column] = target_np[:, :, 0]
+
     target_np: Optional[np.ndarray] = None
-    if config.target_column in df.columns:
-        target_np = _build_3d(df, asset_ids, timestamps, [config.target_column])
-        target_np = target_np[:, :, 0]  # squeeze to (M, T)
+    default_target_name = config.default_target
+    if target_arrays_np:
+        target_np = target_arrays_np.get(default_target_name)
+        if target_np is None:
+            first_target = next(iter(target_arrays_np))
+            target_np = target_arrays_np[first_target]
+            default_target_name = first_target
 
     data = _to_backend(data_np, config.backend, config.dtype)
     target = _to_backend(target_np, config.backend, config.dtype) if target_np is not None else None
+    targets = {
+        name: _to_backend(target_arr, config.backend, config.dtype)
+        for name, target_arr in target_arrays_np.items()
+    }
 
     return TensorDataset(
         data=data,
@@ -228,6 +332,8 @@ def build_tensor(
         asset_ids=asset_ids,
         timestamps=timestamps,
         feature_names=list(config.features),
+        targets=targets,
+        default_target=default_target_name,
     )
 
 
@@ -276,6 +382,7 @@ def temporal_split(
         # np arrays: index along axis 1 (time)
         d = ds.data
         t = ds.target
+        targets = ds.targets
 
         # Handle different backends
         if hasattr(d, "numpy"):
@@ -294,6 +401,11 @@ def temporal_split(
         return TensorDataset(
             data=d_slice,
             target=t_slice,
+            targets={
+                name: target[:, idx] if target is not None else None
+                for name, target in targets.items()
+            },
+            default_target=ds.default_target,
             asset_ids=ds.asset_ids,
             timestamps=ds.timestamps[idx],
             feature_names=ds.feature_names,
@@ -336,6 +448,7 @@ def sample_assets(
     idx = np.sort(rng.choice(M, size=m, replace=False))
     d = ds.data
     t = ds.target
+    targets = ds.targets
 
     if hasattr(d, "numpy"):
         d_sub = d[idx, :, :]
@@ -350,6 +463,11 @@ def sample_assets(
     return TensorDataset(
         data=d_sub,
         target=t_sub,
+        targets={
+            name: target[idx, :] if target is not None else None
+            for name, target in targets.items()
+        },
+        default_target=ds.default_target,
         asset_ids=ds.asset_ids[idx],
         timestamps=ds.timestamps,
         feature_names=ds.feature_names,

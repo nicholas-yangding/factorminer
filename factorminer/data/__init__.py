@@ -27,11 +27,13 @@ from factorminer.data.preprocessor import (
 )
 from factorminer.data.tensor_builder import (
     DEFAULT_FEATURES,
+    TargetSpec,
     TensorConfig,
     TensorDataset,
     build_pipeline,
     build_tensor,
     compute_target,
+    compute_targets,
     sample_assets,
     temporal_split,
 )
@@ -61,11 +63,13 @@ __all__ = [
     "winsorise",
     # tensor_builder
     "DEFAULT_FEATURES",
+    "TargetSpec",
     "TensorConfig",
     "TensorDataset",
     "build_pipeline",
     "build_tensor",
     "compute_target",
+    "compute_targets",
     "sample_assets",
     "temporal_split",
 ]

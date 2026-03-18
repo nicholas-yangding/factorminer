@@ -1,30 +1,13 @@
 {
-  "factors": [
-    {
-      "id": 1,
-      "name": "price_range_ratio",
-      "formula": "Div(Sub($high, $low), Add($high, $low))",
-      "category": "Other",
-      "ic_mean": 0.2486060606060606,
-      "icir": -0.3678513450563207,
-      "ic_win_rate": 0.24,
-      "max_correlation": 0.0,
-      "batch_number": 1,
-      "admission_date": "2026-03-18 14:03:14"
-    }
-  ],
+  "factors": [],
   "diagnostics": {
-    "size": 1,
-    "category_counts": {
-      "Other": 1
-    },
-    "category_avg_ic": {
-      "Other": 0.2486060606060606
-    },
+    "size": 0,
+    "category_counts": {},
+    "category_avg_ic": {},
     "avg_correlation": 0.0,
     "max_correlation": 0.0,
     "p95_correlation": 0.0,
     "saturation": 0.0
   },
-  "exported_at": "2026-03-18T14:03:14.738289"
+  "exported_at": "2026-03-18T18:40:59.133465"
 }

@@ -96,6 +96,18 @@ data:
   # Out-of-sample test period [start, end] in ISO format
   test_period: ["2025-01-01", "2025-12-31"]
 
+  # Named target definitions. The default target drives benchmark-facing metrics;
+  # research mode can score all configured targets jointly.
+  targets:
+    - name: "paper"
+      entry_delay_bars: 1
+      holding_bars: 1
+      price_pair: "open_to_close"
+      return_transform: "simple"
+
+  # Target used for paper-style scalar evaluation surfaces.
+  default_target: "paper"
+
 # ---------------------------------------------------------------------------
 # LLM provider settings
 # ---------------------------------------------------------------------------
@@ -178,6 +190,52 @@ benchmark:
 
   # Reference panel shape [periods, assets] used for efficiency benchmarks
   efficiency_panel_shape: [12610, 500]
+
+# ---------------------------------------------------------------------------
+# Research-first multi-horizon scoring
+# ---------------------------------------------------------------------------
+research:
+  enabled: false
+
+  # single_horizon | weighted_multi_horizon | pareto_multi_horizon | net_ir
+  primary_objective: "weighted_multi_horizon"
+
+  # weighted | pareto
+  target_aggregation: "weighted"
+
+  # Optional explicit weights per target name. Empty => infer from data.targets order.
+  horizon_weights: {}
+
+  uncertainty:
+    bootstrap_samples: 200
+    block_size: 20
+    shrinkage_strength: 1.0
+    lcb_zscore: 1.0
+    fdr_alpha: 0.05
+
+  admission:
+    use_residual_ic: true
+    use_effective_rank_gain: true
+    turnover_penalty: 0.05
+    redundancy_penalty: 0.20
+    min_score: 0.04
+    min_lcb: 0.0
+    min_span_gain: 0.05
+    min_effective_rank_gain: 0.0
+
+  selection:
+    models: ["ridge", "elastic_net", "lasso", "xgboost"]
+    rolling_train_window: 80
+    rolling_test_window: 20
+    rolling_step: 20
+
+  regimes:
+    enabled: false
+    definition: "return_volatility_liquidity"
+
+  execution:
+    cost_model: "linear_bps"
+    cost_bps: 4.0
 
 # ---------------------------------------------------------------------------
 # Phase 2 advanced features (disabled by default)

@@ -17,6 +17,35 @@ benchmark:
   report_universes:
     - "CSI500"
 
+data:
+  targets:
+    - name: "h1_open_to_close"
+      entry_delay_bars: 1
+      holding_bars: 1
+      price_pair: "open_to_close"
+      return_transform: "simple"
+    - name: "h3_open_to_close"
+      entry_delay_bars: 1
+      holding_bars: 3
+      price_pair: "open_to_close"
+      return_transform: "simple"
+  default_target: "h1_open_to_close"
+
+research:
+  enabled: true
+  horizon_weights:
+    h1_open_to_close: 0.7
+    h3_open_to_close: 0.3
+  uncertainty:
+    bootstrap_samples: 50
+    block_size: 8
+  selection:
+    rolling_train_window: 40
+    rolling_test_window: 10
+    rolling_step: 10
+  regimes:
+    enabled: true
+
 phase2:
   debate:
     enabled: true
