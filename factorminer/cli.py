@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from dataclasses import fields
 from pathlib import Path
 
 import click
@@ -37,7 +38,10 @@ def _load_data(cfg, data_path: str | None, mock: bool):
         Market data with columns: datetime, asset_id, open, high, low,
         close, volume, amount.
     """
-    if mock or (data_path is None and not hasattr(cfg, "data_path")):
+    raw_cfg = getattr(cfg, "_raw", {})
+    configured_path = raw_cfg.get("data_path")
+
+    if mock:
         click.echo("Generating mock market data...")
         from factorminer.data.mock_data import MockConfig, generate_mock_data
 
@@ -52,8 +56,7 @@ def _load_data(cfg, data_path: str | None, mock: bool):
     # Try data_path argument, then config top-level data_path
     path = data_path
     if path is None:
-        # The config YAML may have a top-level data_path field
-        path = getattr(cfg, "_raw", {}).get("data_path", None)
+        path = configured_path
 
     if path is None:
         click.echo("No data path specified. Use --data or --mock flag.")
@@ -75,14 +78,21 @@ def _prepare_data_arrays(df):
     returns : np.ndarray, shape (M, T)
         Forward returns.
     """
-    import pandas as pd
-
     asset_ids = sorted(df["asset_id"].unique())
     dates = sorted(df["datetime"].unique())
     M = len(asset_ids)
     T = len(dates)
 
-    feature_cols = ["open", "high", "low", "close", "volume", "amount"]
+    feature_cols = [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "amount",
+        "vwap",
+        "returns",
+    ]
     F = len(feature_cols)
 
     data_tensor = np.full((M, T, F), np.nan, dtype=np.float64)
@@ -94,14 +104,57 @@ def _prepare_data_arrays(df):
     for _, row in df.iterrows():
         ai = asset_to_idx[row["asset_id"]]
         ti = date_to_idx[row["datetime"]]
-        for fi, col in enumerate(feature_cols):
+        for fi, col in enumerate(feature_cols[:6]):
             data_tensor[ai, ti, fi] = row[col]
 
-    # Compute forward returns from close prices
+        if "vwap" in row.index and not np.isnan(row["vwap"]):
+            data_tensor[ai, ti, 6] = row["vwap"]
+        elif (
+            not np.isnan(row["volume"])
+            and abs(row["volume"]) > 1e-12
+            and not np.isnan(row["amount"])
+        ):
+            data_tensor[ai, ti, 6] = row["amount"] / row["volume"]
+
+        if "returns" in row.index and not np.isnan(row["returns"]):
+            data_tensor[ai, ti, 7] = row["returns"]
+
     close_idx = feature_cols.index("close")
+    amount_idx = feature_cols.index("amount")
+    vwap_idx = feature_cols.index("vwap")
+    feature_returns_idx = feature_cols.index("returns")
+
+    # Fill derived VWAP where the source file did not provide it.
+    volume = data_tensor[:, :, feature_cols.index("volume")]
+    amount = data_tensor[:, :, amount_idx]
+    derived_vwap = np.divide(
+        amount,
+        volume,
+        out=np.full_like(amount, np.nan),
+        where=np.abs(volume) > 1e-12,
+    )
+    missing_vwap = np.isnan(data_tensor[:, :, vwap_idx])
+    data_tensor[:, :, vwap_idx] = np.where(
+        missing_vwap,
+        np.where(np.isnan(derived_vwap), data_tensor[:, :, close_idx], derived_vwap),
+        data_tensor[:, :, vwap_idx],
+    )
+
+    # Compute bar returns feature from close prices where missing.
     for i in range(M):
         close = data_tensor[i, :, close_idx]
-        # Simple 1-period forward return
+        asset_returns = np.full(T, np.nan, dtype=np.float64)
+        asset_returns[1:] = (close[1:] - close[:-1]) / np.where(
+            close[:-1] == 0, np.nan, close[:-1]
+        )
+        missing_feature_returns = np.isnan(data_tensor[i, :, feature_returns_idx])
+        data_tensor[i, :, feature_returns_idx] = np.where(
+            missing_feature_returns,
+            asset_returns,
+            data_tensor[i, :, feature_returns_idx],
+        )
+
+        # Simple 1-period forward return target.
         returns[i, :-1] = (close[1:] - close[:-1]) / np.where(
             close[:-1] == 0, np.nan, close[:-1]
         )
@@ -127,6 +180,276 @@ def _create_llm_provider(cfg, mock: bool):
 
     click.echo(f"Using LLM provider: {cfg.llm.provider}/{cfg.llm.model}")
     return create_provider(llm_config)
+
+
+def _build_core_mining_config(cfg, output_dir: Path, mock: bool = False):
+    """Create the flat mining config expected by RalphLoop/HelixLoop."""
+    from factorminer.core.config import MiningConfig as CoreMiningConfig
+
+    signal_failure_policy = (
+        "synthetic" if mock else cfg.evaluation.signal_failure_policy
+    )
+
+    return CoreMiningConfig(
+        target_library_size=cfg.mining.target_library_size,
+        batch_size=cfg.mining.batch_size,
+        max_iterations=cfg.mining.max_iterations,
+        ic_threshold=cfg.mining.ic_threshold,
+        icir_threshold=cfg.mining.icir_threshold,
+        correlation_threshold=cfg.mining.correlation_threshold,
+        replacement_ic_min=cfg.mining.replacement_ic_min,
+        replacement_ic_ratio=cfg.mining.replacement_ic_ratio,
+        fast_screen_assets=cfg.evaluation.fast_screen_assets,
+        num_workers=cfg.evaluation.num_workers,
+        output_dir=str(output_dir),
+        backend=cfg.evaluation.backend,
+        gpu_device=cfg.evaluation.gpu_device,
+        signal_failure_policy=signal_failure_policy,
+    )
+
+
+def _save_result_library(library, output_dir: Path) -> Path:
+    """Persist a factor library to the standard output location."""
+    from factorminer.core.library_io import save_library
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    lib_path = output_dir / "factor_library"
+    save_library(library, lib_path)
+    return lib_path.with_suffix(".json")
+
+
+def _filter_dataclass_kwargs(source, target_cls):
+    """Copy shared dataclass fields from one config object to another."""
+    target_fields = {f.name for f in fields(target_cls)}
+    source_fields = getattr(source, "__dataclass_fields__", {})
+    return {
+        name: getattr(source, name)
+        for name in source_fields
+        if name in target_fields
+    }
+
+
+def _build_debate_config(cfg):
+    """Build the runtime debate config from YAML config settings."""
+    if not cfg.phase2.debate.enabled:
+        return None
+
+    from factorminer.agent.debate import DebateConfig as RuntimeDebateConfig
+    from factorminer.agent.specialists import DEFAULT_SPECIALISTS
+
+    available = len(DEFAULT_SPECIALISTS)
+    requested = cfg.phase2.debate.num_specialists
+    selected = list(DEFAULT_SPECIALISTS[:requested])
+    if requested > available:
+        logger.warning(
+            "Requested %d specialists but only %d are available; using all defaults.",
+            requested,
+            available,
+        )
+
+    return RuntimeDebateConfig(
+        specialists=selected,
+        enable_critic=cfg.phase2.debate.enable_critic,
+        candidates_per_specialist=cfg.phase2.debate.candidates_per_specialist,
+        top_k_after_critic=cfg.phase2.debate.top_k_after_critic,
+        critic_temperature=cfg.phase2.debate.critic_temperature,
+    )
+
+
+def _build_phase2_runtime_configs(cfg):
+    """Instantiate evaluation/runtime configs for the Helix loop."""
+    from factorminer.evaluation.causal import CausalConfig as RuntimeCausalConfig
+    from factorminer.evaluation.capacity import CapacityConfig as RuntimeCapacityConfig
+    from factorminer.evaluation.regime import RegimeConfig as RuntimeRegimeConfig
+    from factorminer.evaluation.significance import (
+        SignificanceConfig as RuntimeSignificanceConfig,
+    )
+
+    causal_config = None
+    if cfg.phase2.causal.enabled:
+        causal_config = RuntimeCausalConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.causal, RuntimeCausalConfig)
+        )
+
+    regime_config = None
+    if cfg.phase2.regime.enabled:
+        regime_config = RuntimeRegimeConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.regime, RuntimeRegimeConfig)
+        )
+
+    capacity_config = None
+    if cfg.phase2.capacity.enabled:
+        capacity_config = RuntimeCapacityConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.capacity, RuntimeCapacityConfig)
+        )
+
+    significance_config = None
+    if cfg.phase2.significance.enabled:
+        significance_config = RuntimeSignificanceConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.significance, RuntimeSignificanceConfig)
+        )
+
+    return {
+        "debate_config": _build_debate_config(cfg),
+        "causal_config": causal_config,
+        "regime_config": regime_config,
+        "capacity_config": capacity_config,
+        "significance_config": significance_config,
+    }
+
+
+def _extract_capacity_volume(data_tensor: np.ndarray) -> np.ndarray | None:
+    """Prefer dollar volume (`amount`) and fall back to raw volume if needed."""
+    if data_tensor.ndim != 3 or data_tensor.shape[2] == 0:
+        return None
+
+    amount_idx = 5
+    volume_idx = 4
+
+    if data_tensor.shape[2] > amount_idx:
+        amount = data_tensor[:, :, amount_idx]
+        if not np.all(np.isnan(amount)):
+            return amount
+
+    if data_tensor.shape[2] > volume_idx:
+        volume = data_tensor[:, :, volume_idx]
+        if not np.all(np.isnan(volume)):
+            return volume
+
+    return None
+
+
+def _active_phase2_features(cfg) -> list[str]:
+    """Describe the effective Helix feature set for CLI output."""
+    features: list[str] = []
+
+    if cfg.phase2.causal.enabled:
+        features.append("causal")
+    if cfg.phase2.regime.enabled:
+        features.append("regime")
+    if cfg.phase2.capacity.enabled:
+        features.append("capacity")
+    if cfg.phase2.significance.enabled:
+        features.append("significance")
+    if cfg.phase2.debate.enabled:
+        features.append("debate")
+    if cfg.phase2.auto_inventor.enabled:
+        features.append("auto-inventor")
+    if cfg.phase2.helix.enabled and cfg.phase2.helix.enable_canonicalization:
+        features.append("canonicalization")
+    if cfg.phase2.helix.enabled and cfg.phase2.helix.enable_knowledge_graph:
+        features.append("knowledge-graph")
+    if cfg.phase2.helix.enabled and cfg.phase2.helix.enable_embeddings:
+        features.append("embeddings")
+
+    return features
+
+
+def _load_runtime_dataset_for_analysis(cfg, data_path: str | None, mock: bool):
+    """Load, preprocess, split, and tensorize data for analysis commands."""
+    from factorminer.evaluation.runtime import load_runtime_dataset
+
+    raw_df = _load_data(cfg, data_path, mock)
+    return load_runtime_dataset(raw_df, cfg)
+
+
+def _recompute_analysis_artifacts(library, dataset, signal_failure_policy: str):
+    """Recompute library factors on the canonical analysis dataset."""
+    from factorminer.evaluation.runtime import evaluate_factors
+
+    return evaluate_factors(
+        library.list_factors(),
+        dataset,
+        signal_failure_policy=signal_failure_policy,
+    )
+
+
+def _report_artifact_failures(artifacts, header: str) -> list[str]:
+    """Print a concise recomputation failure summary and return failure texts."""
+    from factorminer.evaluation.runtime import summarize_failures
+
+    failures = summarize_failures(artifacts)
+    if not failures:
+        return []
+
+    click.echo(f"{header}: {len(failures)} factor(s) failed to recompute.")
+    for failure in failures[:10]:
+        click.echo(f"  - {failure}")
+    if len(failures) > 10:
+        click.echo(f"  ... and {len(failures) - 10} more")
+
+    return failures
+
+
+def _artifact_map_by_id(artifacts):
+    return {artifact.factor_id: artifact for artifact in artifacts}
+
+
+def _select_artifacts_for_ids(artifacts, factor_ids: tuple[int, ...]):
+    if not factor_ids:
+        return [artifact for artifact in artifacts if artifact.succeeded]
+
+    artifact_map = _artifact_map_by_id(artifacts)
+    selected = []
+    failed = []
+    missing = []
+    for factor_id in factor_ids:
+        artifact = artifact_map.get(factor_id)
+        if artifact is None:
+            missing.append(str(factor_id))
+        elif not artifact.succeeded:
+            failed.append(artifact)
+        else:
+            selected.append(artifact)
+
+    if missing:
+        click.echo(f"Missing recomputed factors for ids: {', '.join(missing)}")
+        raise click.Abort()
+    if failed:
+        click.echo("Requested factors failed to recompute:")
+        for artifact in failed:
+            click.echo(f"  - {artifact.factor_id}: {artifact.name} ({artifact.error})")
+        raise click.Abort()
+
+    return selected
+
+
+def _analysis_output_path(output_dir: Path, stem: str, split_name: str, fmt: str) -> str:
+    return str(output_dir / f"{stem}_{split_name}.{fmt}")
+
+
+def _print_recomputed_factor_table(artifacts, split_name: str) -> None:
+    click.echo(
+        f"{'ID':>4s}  {'Name':<35s}  {'IC Mean':>8s}  {'|IC|':>8s}  "
+        f"{'ICIR':>7s}  {'Win%':>6s}  {'Turn':>6s}"
+    )
+    click.echo("-" * 90)
+
+    for artifact in artifacts:
+        stats = artifact.split_stats[split_name]
+        click.echo(
+            f"{artifact.factor_id:4d}  {artifact.name:<35s}  "
+            f"{stats['ic_mean']:8.4f}  {stats['ic_abs_mean']:8.4f}  "
+            f"{stats['icir']:7.3f}  {stats['ic_win_rate'] * 100:5.1f}%  "
+            f"{stats['turnover']:6.3f}"
+        )
+
+
+def _print_split_summary(artifacts, split_name: str) -> None:
+    if not artifacts:
+        click.echo("  No successful factor recomputations.")
+        return
+
+    ic_values = [artifact.split_stats[split_name]["ic_mean"] for artifact in artifacts]
+    abs_ic_values = [artifact.split_stats[split_name]["ic_abs_mean"] for artifact in artifacts]
+    icir_values = [artifact.split_stats[split_name]["icir"] for artifact in artifacts]
+    click.echo("-" * 90)
+    click.echo(f"  Total factors:    {len(artifacts)}")
+    click.echo(f"  Mean IC:          {np.mean(ic_values):.4f}")
+    click.echo(f"  Mean |IC|:        {np.mean(abs_ic_values):.4f}")
+    click.echo(f"  Mean ICIR:        {np.mean(icir_values):.3f}")
+    click.echo(f"  Max |IC|:         {max(abs_ic_values):.4f}")
+    click.echo(f"  Min |IC|:         {min(abs_ic_values):.4f}")
 
 
 def _load_library_from_path(library_path: str):
@@ -210,6 +533,9 @@ def main(ctx: click.Context, config: str | None, gpu: bool, verbose: bool, outpu
     except Exception:
         cfg._raw = {}
 
+    if output_dir == "output":
+        output_dir = cfg._raw.get("output_dir", output_dir)
+
     ctx.ensure_object(dict)
     ctx.obj["config"] = cfg
     ctx.obj["verbose"] = verbose
@@ -290,22 +616,7 @@ def mine(
         library = _load_library_from_path(resume)
 
     # Create and configure MiningConfig for the RalphLoop
-    from factorminer.core.config import MiningConfig as CoreMiningConfig
-
-    mining_config = CoreMiningConfig(
-        target_library_size=cfg.mining.target_library_size,
-        batch_size=cfg.mining.batch_size,
-        max_iterations=cfg.mining.max_iterations,
-        ic_threshold=cfg.mining.ic_threshold,
-        icir_threshold=cfg.mining.icir_threshold,
-        correlation_threshold=cfg.mining.correlation_threshold,
-        replacement_ic_min=cfg.mining.replacement_ic_min,
-        replacement_ic_ratio=cfg.mining.replacement_ic_ratio,
-        fast_screen_assets=cfg.evaluation.fast_screen_assets,
-        num_workers=cfg.evaluation.num_workers,
-        output_dir=str(output_dir),
-        backend=cfg.evaluation.backend,
-    )
+    mining_config = _build_core_mining_config(cfg, output_dir, mock=mock)
 
     # Create and run the Ralph Loop
     from factorminer.core.ralph_loop import RalphLoop
@@ -343,15 +654,11 @@ def mine(
         raise click.Abort()
 
     # Save results
-    from factorminer.core.library_io import save_library
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    lib_path = output_dir / "factor_library"
-    save_library(result_library, lib_path)
+    lib_path = _save_result_library(result_library, output_dir)
 
     click.echo("=" * 60)
     click.echo(f"Mining complete! Library size: {result_library.size}")
-    click.echo(f"Library saved to: {lib_path}.json")
+    click.echo(f"Library saved to: {lib_path}")
     click.echo("=" * 60)
 
 
@@ -376,6 +683,7 @@ def evaluate(
 ) -> None:
     """Evaluate a factor library on historical data."""
     cfg = ctx.obj["config"]
+    signal_failure_policy = cfg.evaluation.signal_failure_policy
 
     click.echo("=" * 60)
     click.echo("FactorMiner -- Factor Evaluation")
@@ -384,44 +692,55 @@ def evaluate(
     # Load library
     library = _load_library_from_path(library_path)
 
-    # Load market data
     try:
-        df = _load_data(cfg, data_path, mock)
+        dataset = _load_runtime_dataset_for_analysis(cfg, data_path, mock)
     except Exception as e:
         click.echo(f"Error loading data: {e}")
         raise click.Abort()
 
     click.echo(f"  Period: {period} | Backend: {cfg.evaluation.backend}")
-    click.echo(f"  Data: {df['asset_id'].nunique()} assets x {df['datetime'].nunique()} periods")
+    click.echo(
+        f"  Data: {len(dataset.asset_ids)} assets x {len(dataset.timestamps)} periods"
+    )
 
-    # Get factors to evaluate
-    factors = library.list_factors()
-    if top_k is not None and top_k < len(factors):
-        factors = sorted(factors, key=lambda f: abs(f.ic_mean), reverse=True)[:top_k]
-        click.echo(f"  Evaluating top {top_k} factors by IC")
+    artifacts = _recompute_analysis_artifacts(library, dataset, signal_failure_policy)
+    failures = _report_artifact_failures(artifacts, header="Evaluation warnings")
 
-    click.echo("-" * 60)
+    from factorminer.evaluation.runtime import analysis_split_names, select_top_k
 
-    # Print factor stats table
-    click.echo(f"{'ID':>4s}  {'Name':<35s}  {'IC Mean':>8s}  {'ICIR':>7s}  {'Win%':>6s}  {'MaxCorr':>8s}")
-    click.echo("-" * 75)
+    split_names = analysis_split_names(period)
+    selection_split = "train" if period == "both" else split_names[0]
+    selected = select_top_k(artifacts, selection_split, top_k)
+    if not selected:
+        click.echo("No factors successfully recomputed for evaluation.")
+        if signal_failure_policy == "reject" and failures:
+            raise click.Abort()
+        raise click.Abort()
 
-    for f in factors:
-        click.echo(
-            f"{f.id:4d}  {f.name:<35s}  {f.ic_mean:8.4f}  {f.icir:7.3f}  "
-            f"{f.ic_win_rate * 100:5.1f}%  {f.max_correlation:8.4f}"
-        )
+    if top_k is not None and top_k < len([a for a in artifacts if a.succeeded]):
+        if period == "both":
+            click.echo(f"  Evaluating top {top_k} factors by train |IC| for train/test comparison")
+        else:
+            click.echo(f"  Evaluating top {top_k} factors by {selection_split} |IC|")
 
-    # Summary statistics
-    if factors:
-        ic_values = [f.ic_mean for f in factors]
-        icir_values = [f.icir for f in factors]
-        click.echo("-" * 75)
-        click.echo(f"  Total factors:    {len(factors)}")
-        click.echo(f"  Mean IC:          {np.mean(ic_values):.4f}")
-        click.echo(f"  Mean ICIR:        {np.mean(icir_values):.3f}")
-        click.echo(f"  Max IC:           {max(ic_values):.4f}")
-        click.echo(f"  Min IC:           {min(ic_values):.4f}")
+    for split_name in split_names:
+        click.echo("-" * 60)
+        click.echo(f"Split: {split_name}")
+        _print_recomputed_factor_table(selected, split_name)
+        _print_split_summary(selected, split_name)
+
+    if period == "both" and selected:
+        click.echo("-" * 60)
+        click.echo("Decay summary (train -> test)")
+        click.echo(f"{'ID':>4s}  {'Name':<35s}  {'Train |IC|':>10s}  {'Test |IC|':>9s}  {'Delta':>8s}")
+        click.echo("-" * 80)
+        for artifact in selected:
+            train_ic = artifact.split_stats["train"]["ic_abs_mean"]
+            test_ic = artifact.split_stats["test"]["ic_abs_mean"]
+            click.echo(
+                f"{artifact.factor_id:4d}  {artifact.name:<35s}  "
+                f"{train_ic:10.4f}  {test_ic:9.4f}  {test_ic - train_ic:8.4f}"
+            )
 
     click.echo("=" * 60)
 
@@ -434,6 +753,18 @@ def evaluate(
 @click.argument("library_path", type=click.Path(exists=True))
 @click.option("--data", "data_path", type=click.Path(exists=True), default=None, help="Path to market data file.")
 @click.option("--mock", is_flag=True, help="Use mock data for combination.")
+@click.option(
+    "--fit-period",
+    type=click.Choice(["train", "test", "both"]),
+    default="train",
+    help="Split used for top-k selection and model/weight fitting.",
+)
+@click.option(
+    "--eval-period",
+    type=click.Choice(["train", "test", "both"]),
+    default="test",
+    help="Split used to evaluate the combined signal.",
+)
 @click.option(
     "--method", "-m",
     type=click.Choice(["equal-weight", "ic-weighted", "orthogonal", "all"]),
@@ -453,6 +784,8 @@ def combine(
     library_path: str,
     data_path: str | None,
     mock: bool,
+    fit_period: str,
+    eval_period: str,
     method: str,
     selection: str,
     top_k: int | None,
@@ -468,71 +801,74 @@ def combine(
     # Load library
     library = _load_library_from_path(library_path)
 
-    # Load market data
+    from factorminer.evaluation.runtime import (
+        resolve_split_for_fit_eval,
+        select_top_k,
+    )
+
     try:
-        df = _load_data(cfg, data_path, mock)
+        dataset = _load_runtime_dataset_for_analysis(cfg, data_path, mock)
     except Exception as e:
         click.echo(f"Error loading data: {e}")
         raise click.Abort()
 
-    # Prepare data
-    data_tensor, returns_arr = _prepare_data_arrays(df)
+    artifacts = _recompute_analysis_artifacts(
+        library,
+        dataset,
+        cfg.evaluation.signal_failure_policy,
+    )
+    failures = _report_artifact_failures(artifacts, header="Combination warnings")
 
-    # Build factor signals dict
-    factors = library.list_factors()
-    if top_k is not None and top_k < len(factors):
-        factors = sorted(factors, key=lambda f: abs(f.ic_mean), reverse=True)[:top_k]
-        click.echo(f"  Pre-selected top {top_k} factors")
+    fit_split = resolve_split_for_fit_eval(fit_period)
+    eval_split = resolve_split_for_fit_eval(eval_period)
 
-    # Use signals from library if available, otherwise generate pseudo-signals
-    factor_signals: dict[int, np.ndarray] = {}
-    ic_values: dict[int, float] = {}
-    M, T = returns_arr.shape
-
-    for f in factors:
-        if f.signals is not None:
-            factor_signals[f.id] = f.signals
-        else:
-            # Generate deterministic pseudo-signals from formula hash
-            seed = hash(f.formula) % (2**31)
-            rng = np.random.RandomState(seed)
-            factor_signals[f.id] = rng.randn(M, T).astype(np.float64)
-        ic_values[f.id] = f.ic_mean
-
-    if not factor_signals:
-        click.echo("No factors with signals available for combination.")
+    selected_artifacts = select_top_k(artifacts, fit_split, top_k)
+    if not selected_artifacts:
+        click.echo("No factors successfully recomputed for combination.")
+        if cfg.evaluation.signal_failure_policy == "reject" and failures:
+            raise click.Abort()
         raise click.Abort()
 
-    click.echo(f"  Combining {len(factor_signals)} factors")
+    if top_k is not None and top_k < len([a for a in artifacts if a.succeeded]):
+        click.echo(f"  Pre-selected top {len(selected_artifacts)} factors by {fit_split} |IC|")
+
+    click.echo(f"  Fit split:  {fit_split}")
+    click.echo(f"  Eval split: {eval_split}")
+    click.echo(f"  Combining {len(selected_artifacts)} factors")
     click.echo("-" * 60)
 
     # Run selection if requested
+    selected_ids = [artifact.factor_id for artifact in selected_artifacts]
+    fit_returns_tn = dataset.get_split(fit_split).returns.T
+    fit_factor_signals = {
+        artifact.factor_id: artifact.split_signals[fit_split].T
+        for artifact in selected_artifacts
+    }
+
     if selection != "none":
         click.echo(f"\n  Running {selection} selection...")
         from factorminer.evaluation.selection import FactorSelector
 
         selector = FactorSelector()
-        # Transpose returns to (T, N) for the selector API
-        returns_tn = returns_arr.T  # (T, M)
-        signals_tn = {fid: sig.T for fid, sig in factor_signals.items()}
 
         try:
             if selection == "lasso":
-                results = selector.lasso_selection(signals_tn, returns_tn)
+                results = selector.lasso_selection(fit_factor_signals, fit_returns_tn)
             elif selection == "stepwise":
-                results = selector.forward_stepwise(signals_tn, returns_tn)
+                results = selector.forward_stepwise(fit_factor_signals, fit_returns_tn)
             elif selection == "xgboost":
-                results = selector.xgboost_selection(signals_tn, returns_tn)
+                results = selector.xgboost_selection(fit_factor_signals, fit_returns_tn)
             else:
                 results = []
 
             if results:
+                selected_ids = [factor_id for factor_id, _ in results]
                 click.echo(f"\n  {selection.capitalize()} selection results:")
                 click.echo(f"  {'Factor ID':>10s}  {'Score':>10s}")
                 click.echo("  " + "-" * 25)
                 for fid, score in results[:20]:  # Show top 20
                     click.echo(f"  {fid:10d}  {score:10.4f}")
-                click.echo(f"  Total selected: {len(results)}")
+                click.echo(f"  Total selected: {len(selected_ids)}")
             else:
                 click.echo(f"  {selection} selection returned no factors.")
         except ImportError as e:
@@ -543,10 +879,21 @@ def combine(
 
     # Run combination methods
     from factorminer.evaluation.combination import FactorCombiner
+    from factorminer.evaluation.portfolio import PortfolioBacktester
 
     combiner = FactorCombiner()
-    # Transpose to (T, N) for the combiner API
-    signals_tn = {fid: sig.T for fid, sig in factor_signals.items()}
+    backtester = PortfolioBacktester()
+    artifact_map = _artifact_map_by_id(selected_artifacts)
+    eval_factor_signals = {
+        factor_id: artifact_map[factor_id].split_signals[eval_split].T
+        for factor_id in selected_ids
+        if factor_id in artifact_map
+    }
+    ic_values = {
+        factor_id: artifact_map[factor_id].split_stats[fit_split]["ic_mean"]
+        for factor_id in eval_factor_signals
+    }
+    eval_returns_tn = dataset.get_split(eval_split).returns.T
 
     methods_to_run = []
     if method == "all":
@@ -558,22 +905,20 @@ def combine(
         click.echo(f"\n  {m.upper()} combination:")
         try:
             if m == "equal-weight":
-                composite = combiner.equal_weight(signals_tn)
+                composite = combiner.equal_weight(eval_factor_signals)
             elif m == "ic-weighted":
-                composite = combiner.ic_weighted(signals_tn, ic_values)
+                composite = combiner.ic_weighted(eval_factor_signals, ic_values)
             elif m == "orthogonal":
-                composite = combiner.orthogonal(signals_tn)
+                composite = combiner.orthogonal(eval_factor_signals)
             else:
                 continue
 
-            # Compute IC of the composite signal
-            from factorminer.evaluation.metrics import compute_factor_stats
-
-            stats = compute_factor_stats(composite, returns_arr.T)
-            click.echo(f"    IC Mean:    {stats['ic_mean']:.4f}")
-            click.echo(f"    IC AbsMean: {stats['ic_abs_mean']:.4f}")
-            click.echo(f"    ICIR:       {stats['icir']:.4f}")
-            click.echo(f"    Win Rate:   {stats['ic_win_rate']:.1%}")
+            stats = backtester.quintile_backtest(composite, eval_returns_tn)
+            click.echo(f"    IC Mean:      {stats['ic_mean']:.4f}")
+            click.echo(f"    ICIR:         {stats['icir']:.4f}")
+            click.echo(f"    Long-Short:   {stats['ls_return']:.4f}")
+            click.echo(f"    Monotonicity: {stats['monotonicity']:.2f}")
+            click.echo(f"    Avg Turnover: {stats['avg_turnover']:.4f}")
         except Exception as e:
             click.echo(f"    Error: {e}")
             logger.exception("Combination method %s failed", m)
@@ -589,6 +934,9 @@ def combine(
 @click.argument("library_path", type=click.Path(exists=True))
 @click.option("--data", "data_path", type=click.Path(exists=True), default=None, help="Path to market data file.")
 @click.option("--mock", is_flag=True, help="Use mock data for visualization.")
+@click.option("--period", type=click.Choice(["train", "test", "both"]), default="test", help="Evaluation split to visualize.")
+@click.option("--factor-id", "factor_ids", type=int, multiple=True, help="Specific factor ID(s) to visualize.")
+@click.option("--top-k", type=int, default=None, help="Top-K factors by split |IC| for set-level plots.")
 @click.option("--tearsheet", is_flag=True, help="Generate a full factor tear sheet.")
 @click.option("--correlation", is_flag=True, help="Plot factor correlation heatmap.")
 @click.option("--ic-timeseries", is_flag=True, help="Plot IC time series.")
@@ -600,6 +948,9 @@ def visualize(
     library_path: str,
     data_path: str | None,
     mock: bool,
+    period: str,
+    factor_ids: tuple[int, ...],
+    top_k: int | None,
     tearsheet: bool,
     correlation: bool,
     ic_timeseries: bool,
@@ -628,134 +979,137 @@ def visualize(
     output_dir.mkdir(parents=True, exist_ok=True)
     click.echo(f"  Output format: {fmt}")
     click.echo(f"  Output dir:    {output_dir}")
+    click.echo(f"  Period:        {period}")
     click.echo("-" * 60)
 
-    factors = library.list_factors()
+    try:
+        dataset = _load_runtime_dataset_for_analysis(cfg, data_path, mock)
+    except Exception as e:
+        click.echo(f"Error loading data: {e}")
+        raise click.Abort()
 
-    # Correlation heatmap
-    if correlation:
-        click.echo("  Generating correlation heatmap...")
-        try:
-            from factorminer.utils.visualization import plot_correlation_heatmap
+    artifacts = _recompute_analysis_artifacts(
+        library,
+        dataset,
+        cfg.evaluation.signal_failure_policy,
+    )
+    failures = _report_artifact_failures(artifacts, header="Visualization warnings")
 
-            if library.correlation_matrix is not None and library.correlation_matrix.size > 0:
-                names = [f.name[:20] for f in factors]
-                save_path = str(output_dir / f"correlation_heatmap.{fmt}")
+    from factorminer.evaluation.runtime import (
+        analysis_split_names,
+        compute_correlation_matrix,
+        select_top_k,
+    )
+    from factorminer.utils.tearsheet import FactorTearSheet
+    from factorminer.utils.visualization import (
+        plot_correlation_heatmap,
+        plot_ic_timeseries,
+        plot_quintile_returns,
+    )
+
+    split_names = analysis_split_names(period)
+    explicit_artifacts = _select_artifacts_for_ids(artifacts, factor_ids)
+    if not explicit_artifacts and factor_ids:
+        if cfg.evaluation.signal_failure_policy == "reject" and failures:
+            raise click.Abort()
+        raise click.Abort()
+
+    for split_name in split_names:
+        split = dataset.get_split(split_name)
+        click.echo(f"  Split: {split_name}")
+
+        if correlation:
+            if factor_ids:
+                corr_artifacts = explicit_artifacts
+            else:
+                corr_artifacts = select_top_k(artifacts, split_name, top_k)
+
+            if corr_artifacts:
+                click.echo("    Generating correlation heatmap...")
+                corr_matrix = compute_correlation_matrix(corr_artifacts, split_name)
+                save_path = _analysis_output_path(output_dir, "correlation_heatmap", split_name, fmt)
                 plot_correlation_heatmap(
-                    library.correlation_matrix,
-                    names,
-                    save_path=save_path,
-                )
-                click.echo(f"    Saved: {save_path}")
-            else:
-                click.echo("    Skipped: no correlation matrix available in library.")
-        except Exception as e:
-            click.echo(f"    Error: {e}")
-            logger.exception("Correlation heatmap failed")
-
-    # IC timeseries and quintile require market data
-    needs_data = ic_timeseries or quintile or tearsheet
-    df = None
-    if needs_data:
-        try:
-            df = _load_data(cfg, data_path, mock)
-        except Exception as e:
-            click.echo(f"  Warning: Could not load data for IC/quintile plots: {e}")
-            ic_timeseries = False
-            quintile = False
-            tearsheet = False
-
-    if ic_timeseries and df is not None:
-        click.echo("  Generating IC time series plot...")
-        # Use IC values from factor metadata since we may not have signals
-        try:
-            from factorminer.utils.visualization import plot_ic_timeseries
-
-            # Create a synthetic IC series from the library's factor ICs
-            ic_values = np.array([f.ic_mean for f in factors])
-            dates = [f"Factor_{i+1}" for i in range(len(factors))]
-            save_path = str(output_dir / f"ic_timeseries.{fmt}")
-            plot_ic_timeseries(
-                ic_values,
-                dates,
-                rolling_window=min(5, len(factors)),
-                title="Factor IC Values",
-                save_path=save_path,
-            )
-            click.echo(f"    Saved: {save_path}")
-        except Exception as e:
-            click.echo(f"    Error: {e}")
-            logger.exception("IC timeseries failed")
-
-    if quintile and df is not None:
-        click.echo("  Generating quintile returns plot...")
-        try:
-            from factorminer.utils.visualization import plot_quintile_returns
-
-            # Group factors by IC quintile
-            sorted_factors = sorted(factors, key=lambda f: f.ic_mean)
-            n = len(sorted_factors)
-            if n >= 5:
-                q_size = n // 5
-                quintile_data = {}
-                for qi in range(5):
-                    start = qi * q_size
-                    end = start + q_size if qi < 4 else n
-                    q_factors = sorted_factors[start:end]
-                    mean_ic = np.mean([f.ic_mean for f in q_factors])
-                    quintile_data[f"Q{qi+1}"] = float(mean_ic)
-
-                quintile_data["long_short"] = quintile_data["Q5"] - quintile_data["Q1"]
-                save_path = str(output_dir / f"quintile_returns.{fmt}")
-                plot_quintile_returns(
-                    quintile_data,
-                    title="Factor Library Quintile IC",
-                    save_path=save_path,
-                )
-                click.echo(f"    Saved: {save_path}")
-            else:
-                click.echo("    Skipped: need at least 5 factors for quintile plot.")
-        except Exception as e:
-            click.echo(f"    Error: {e}")
-            logger.exception("Quintile plot failed")
-
-    # Tearsheet
-    if tearsheet and df is not None:
-        click.echo("  Generating tear sheets...")
-        try:
-            from factorminer.utils.tearsheet import FactorTearSheet
-
-            data_tensor, returns_arr = _prepare_data_arrays(df)
-            ts = FactorTearSheet()
-            dates_list = sorted(df["datetime"].unique())
-            date_strs = [str(d)[:10] for d in dates_list]
-            T = len(dates_list)
-
-            for f in factors[:10]:  # Limit to first 10 for performance
-                click.echo(f"    Factor #{f.id}: {f.name}...")
-                if f.signals is not None:
-                    signals = f.signals
-                else:
-                    # Generate pseudo-signals
-                    M = data_tensor.shape[0]
-                    seed = hash(f.formula) % (2**31)
-                    rng = np.random.RandomState(seed)
-                    signals = rng.randn(M, T).astype(np.float64)
-
-                save_path = str(output_dir / f"tearsheet_factor_{f.id}.{fmt}")
-                ts.generate(
-                    factor_id=f.id,
-                    factor_name=f.name,
-                    formula=f.formula,
-                    signals=signals,
-                    returns=returns_arr,
-                    dates=date_strs[:signals.shape[1]],
+                    corr_matrix,
+                    [artifact.name[:20] for artifact in corr_artifacts],
+                    title=f"Factor Correlation Heatmap ({split_name})",
                     save_path=save_path,
                 )
                 click.echo(f"      Saved: {save_path}")
-        except Exception as e:
-            click.echo(f"    Tearsheet error: {e}")
-            logger.exception("Tearsheet generation failed")
+            else:
+                click.echo("    Skipped: no successfully recomputed factors for correlation heatmap.")
+
+        factor_artifacts = explicit_artifacts
+        if not factor_ids and (ic_timeseries or quintile or tearsheet):
+            factor_artifacts = select_top_k(artifacts, split_name, 1)
+            if factor_artifacts:
+                click.echo(
+                    f"    Defaulted to factor #{factor_artifacts[0].factor_id} "
+                    f"{factor_artifacts[0].name} for factor-specific plots."
+                )
+
+        if ic_timeseries:
+            click.echo("    Generating IC time series plot(s)...")
+            for artifact in factor_artifacts:
+                stats = artifact.split_stats[split_name]
+                dates = [str(ts)[:10] for ts in split.timestamps]
+                save_path = _analysis_output_path(
+                    output_dir,
+                    f"ic_timeseries_factor_{artifact.factor_id}",
+                    split_name,
+                    fmt,
+                )
+                plot_ic_timeseries(
+                    stats["ic_series"],
+                    dates,
+                    title=f"{artifact.name} IC Time Series ({split_name})",
+                    save_path=save_path,
+                )
+                click.echo(f"      Saved: {save_path}")
+
+        if quintile:
+            click.echo("    Generating quintile return plot(s)...")
+            for artifact in factor_artifacts:
+                stats = artifact.split_stats[split_name]
+                save_path = _analysis_output_path(
+                    output_dir,
+                    f"quintile_returns_factor_{artifact.factor_id}",
+                    split_name,
+                    fmt,
+                )
+                plot_quintile_returns(
+                    {
+                        f"Q{i}": stats[f"Q{i}"] for i in range(1, 6)
+                    }
+                    | {
+                        "long_short": stats["long_short"],
+                        "monotonicity": stats["monotonicity"],
+                    },
+                    title=f"{artifact.name} Quintile Returns ({split_name})",
+                    save_path=save_path,
+                )
+                click.echo(f"      Saved: {save_path}")
+
+        if tearsheet:
+            click.echo("    Generating tear sheet(s)...")
+            ts = FactorTearSheet()
+            dates = [str(ts_)[:10] for ts_ in split.timestamps]
+            for artifact in factor_artifacts:
+                save_path = _analysis_output_path(
+                    output_dir,
+                    f"tearsheet_factor_{artifact.factor_id}",
+                    split_name,
+                    fmt,
+                )
+                ts.generate(
+                    factor_id=artifact.factor_id,
+                    factor_name=artifact.name,
+                    formula=artifact.formula,
+                    signals=artifact.split_signals[split_name],
+                    returns=split.returns,
+                    dates=dates,
+                    save_path=save_path,
+                )
+                click.echo(f"      Saved: {save_path}")
 
     click.echo("=" * 60)
     click.echo("Visualization complete.")
@@ -840,6 +1194,8 @@ def export_cmd(ctx: click.Context, library_path: str, fmt: str, output: str | No
 @click.option("--regime/--no-regime", default=None, help="Enable/disable regime-conditional evaluation.")
 @click.option("--debate/--no-debate", default=None, help="Enable/disable multi-specialist debate generation.")
 @click.option("--canonicalize/--no-canonicalize", default=None, help="Enable/disable SymPy canonicalization.")
+@click.option("--mock", is_flag=True, help="Use mock data and mock LLM provider (for testing).")
+@click.option("--data", "data_path", type=click.Path(exists=True), default=None, help="Path to market data file.")
 @click.pass_context
 def helix(
     ctx: click.Context,
@@ -851,6 +1207,8 @@ def helix(
     regime: bool | None,
     debate: bool | None,
     canonicalize: bool | None,
+    mock: bool,
+    data_path: str | None,
 ) -> None:
     """Run the enhanced Helix Loop with Phase 2 features."""
     cfg = ctx.obj["config"]
@@ -869,6 +1227,8 @@ def helix(
     if debate is not None:
         cfg.phase2.debate.enabled = debate
     if canonicalize is not None:
+        if canonicalize:
+            cfg.phase2.helix.enabled = True
         cfg.phase2.helix.enable_canonicalization = canonicalize
 
     try:
@@ -878,22 +1238,7 @@ def helix(
         raise click.Abort()
 
     output_dir = ctx.obj["output_dir"]
-
-    enabled_features = []
-    if cfg.phase2.causal.enabled:
-        enabled_features.append("causal")
-    if cfg.phase2.regime.enabled:
-        enabled_features.append("regime")
-    if cfg.phase2.capacity.enabled:
-        enabled_features.append("capacity")
-    if cfg.phase2.significance.enabled:
-        enabled_features.append("significance")
-    if cfg.phase2.debate.enabled:
-        enabled_features.append("debate")
-    if cfg.phase2.auto_inventor.enabled:
-        enabled_features.append("auto-inventor")
-    if cfg.phase2.helix.enabled:
-        enabled_features.append("helix-memory")
+    enabled_features = _active_phase2_features(cfg)
 
     click.echo("HelixFactor Phase 2 mining engine.")
     click.echo(f"  Target: {cfg.mining.target_library_size} | "
@@ -909,7 +1254,89 @@ def helix(
     if resume:
         click.echo(f"  Resuming from: {resume}")
 
-    click.echo("Helix loop not yet connected. Infrastructure ready.")
+    try:
+        df = _load_data(cfg, data_path, mock)
+    except Exception as e:
+        click.echo(f"Error loading data: {e}")
+        raise click.Abort()
+
+    n_assets = df["asset_id"].nunique()
+    n_periods = df["datetime"].nunique()
+    click.echo(f"  Data loaded: {n_assets} assets x {n_periods} periods ({len(df)} rows)")
+
+    click.echo("  Preparing data tensors...")
+    data_tensor, returns = _prepare_data_arrays(df)
+    llm_provider = _create_llm_provider(cfg, mock)
+
+    library = None
+    if resume:
+        library = _load_library_from_path(resume)
+
+    mining_config = _build_core_mining_config(cfg, output_dir, mock=mock)
+    phase2_configs = _build_phase2_runtime_configs(cfg)
+    volume = _extract_capacity_volume(data_tensor) if cfg.phase2.capacity.enabled else None
+
+    from factorminer.core.helix_loop import HelixLoop
+
+    click.echo("-" * 60)
+    click.echo("Starting Helix Loop...")
+
+    def _progress_callback(iteration: int, stats: dict) -> None:
+        message = (
+            f"  Iteration {iteration:3d}: "
+            f"Library={stats.get('library_size', 0)}, "
+            f"Admitted={stats.get('admitted', 0)}, "
+            f"Yield={stats.get('yield_rate', 0) * 100:.1f}%"
+        )
+        canon_removed = stats.get("canonical_duplicates_removed", 0)
+        phase2_rejections = stats.get("phase2_rejections", 0)
+        if canon_removed:
+            message += f", CanonDupes={canon_removed}"
+        if phase2_rejections:
+            message += f", Phase2Reject={phase2_rejections}"
+        click.echo(message)
+
+    try:
+        loop = HelixLoop(
+            config=mining_config,
+            data_tensor=data_tensor,
+            returns=returns,
+            llm_provider=llm_provider,
+            library=library,
+            debate_config=phase2_configs["debate_config"],
+            enable_knowledge_graph=(
+                cfg.phase2.helix.enabled and cfg.phase2.helix.enable_knowledge_graph
+            ),
+            enable_embeddings=(
+                cfg.phase2.helix.enabled and cfg.phase2.helix.enable_embeddings
+            ),
+            enable_auto_inventor=cfg.phase2.auto_inventor.enabled,
+            auto_invention_interval=cfg.phase2.auto_inventor.invention_interval,
+            canonicalize=(
+                cfg.phase2.helix.enabled and cfg.phase2.helix.enable_canonicalization
+            ),
+            forgetting_lambda=cfg.phase2.helix.forgetting_lambda,
+            causal_config=phase2_configs["causal_config"],
+            regime_config=phase2_configs["regime_config"],
+            capacity_config=phase2_configs["capacity_config"],
+            significance_config=phase2_configs["significance_config"],
+            volume=volume,
+        )
+        result_library = loop.run(callback=_progress_callback)
+    except KeyboardInterrupt:
+        click.echo("\nHelix mining interrupted by user.")
+        return
+    except Exception as e:
+        click.echo(f"Helix mining error: {e}")
+        logger.exception("Helix loop failed")
+        raise click.Abort()
+
+    lib_path = _save_result_library(result_library, output_dir)
+
+    click.echo("=" * 60)
+    click.echo(f"Helix mining complete! Library size: {result_library.size}")
+    click.echo(f"Library saved to: {lib_path}")
+    click.echo("=" * 60)
 
 
 if __name__ == "__main__":

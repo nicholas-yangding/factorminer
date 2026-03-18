@@ -12,7 +12,9 @@ except ImportError:
     HAS_HELIX = False
 
 from factorminer.agent.llm_interface import MockProvider
+from factorminer.core.factor_library import Factor
 from factorminer.core.config import MiningConfig
+from factorminer.core.ralph_loop import EvaluationResult
 
 
 pytestmark = pytest.mark.skipif(not HAS_HELIX, reason="helix_loop not yet built")
@@ -102,3 +104,102 @@ def test_helix_loop_runs_one_iteration(small_tensor):
     # Run the loop -- should not raise
     loop.run()
     assert loop.library is not None
+
+
+def test_phase2_revocation_updates_stats_and_library_state(small_tensor):
+    """Post-admission revocation should keep stats aligned with library state."""
+    data, returns = small_tensor
+    config = MiningConfig(
+        target_library_size=3,
+        max_iterations=1,
+        batch_size=5,
+        ic_threshold=0.0001,
+        correlation_threshold=0.95,
+    )
+    provider = MockProvider()
+
+    loop = HelixLoop(
+        config=config,
+        data_tensor=data,
+        returns=returns,
+        llm_provider=provider,
+        canonicalize=False,
+        enable_knowledge_graph=False,
+        enable_auto_inventor=False,
+    )
+
+    original_validate = loop._helix_validate
+
+    def force_one_revocation(results, admitted_results):
+        rejected = original_validate(results, admitted_results)
+        for admitted in admitted_results:
+            if admitted.admitted:
+                loop._revoke_admission(admitted, results, "forced test revocation")
+                return rejected + 1
+        return rejected
+
+    loop._helix_validate = force_one_revocation
+
+    stats = loop._run_iteration(batch_size=5)
+
+    assert stats["admitted"] == loop.library.size
+    if loop.library.correlation_matrix is not None:
+        assert loop.library.correlation_matrix.shape[0] == loop.library.size
+
+
+def test_revoke_admission_rebuilds_library_indices(small_tensor):
+    """Revoking a factor should rebuild the library correlation bookkeeping."""
+    data, returns = small_tensor
+    config = MiningConfig(target_library_size=5, max_iterations=1)
+    provider = MockProvider()
+
+    loop = HelixLoop(
+        config=config,
+        data_tensor=data,
+        returns=returns,
+        llm_provider=provider,
+        canonicalize=False,
+        enable_knowledge_graph=False,
+        enable_auto_inventor=False,
+    )
+
+    factor_a = Factor(
+        id=0,
+        name="factor_a",
+        formula="Mean($close, 5)",
+        category="test",
+        ic_mean=0.1,
+        icir=1.0,
+        ic_win_rate=0.6,
+        max_correlation=0.0,
+        batch_number=1,
+        signals=np.ones_like(returns),
+    )
+    factor_b = Factor(
+        id=0,
+        name="factor_b",
+        formula="Std($close, 5)",
+        category="test",
+        ic_mean=0.08,
+        icir=0.9,
+        ic_win_rate=0.55,
+        max_correlation=0.1,
+        batch_number=1,
+        signals=np.full_like(returns, 2.0),
+    )
+
+    loop.library.admit_factor(factor_a)
+    loop.library.admit_factor(factor_b)
+
+    result = EvaluationResult(
+        factor_name="factor_a",
+        formula="Mean($close, 5)",
+        admitted=True,
+    )
+    loop._revoke_admission(result, [], "forced test revocation")
+
+    assert loop.library.size == 1
+    assert list(loop.library.factors.values())[0].name == "factor_b"
+    assert loop.library._id_to_index == {list(loop.library.factors.keys())[0]: 0}
+    assert loop.library.correlation_matrix is not None
+    assert loop.library.correlation_matrix.shape == (1, 1)

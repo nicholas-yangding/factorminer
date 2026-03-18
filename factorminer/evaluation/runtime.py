@@ -1,0 +1,397 @@
+"""Shared runtime evaluation helpers for strict factor recomputation."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence
+
+import numpy as np
+import pandas as pd
+
+from factorminer.core.factor_library import Factor
+from factorminer.core.parser import try_parse
+from factorminer.evaluation.metrics import (
+    compute_factor_stats,
+    compute_pairwise_correlation,
+)
+
+logger = logging.getLogger(__name__)
+
+FEATURE_TO_COLUMN = {
+    "$open": "open",
+    "$high": "high",
+    "$low": "low",
+    "$close": "close",
+    "$volume": "volume",
+    "$amt": "amount",
+    "$vwap": "vwap",
+    "$returns": "returns",
+}
+
+COLUMN_TO_FEATURE = {value: key for key, value in FEATURE_TO_COLUMN.items()}
+
+
+class SignalComputationError(RuntimeError):
+    """Raised when a factor cannot be recomputed under strict policies."""
+
+
+@dataclass
+class DatasetSplit:
+    """One temporal view into the evaluation dataset."""
+
+    name: str
+    indices: np.ndarray
+    timestamps: np.ndarray
+    returns: np.ndarray
+
+    @property
+    def size(self) -> int:
+        return int(len(self.indices))
+
+
+@dataclass
+class EvaluationDataset:
+    """Canonical dataset used for analysis commands."""
+
+    data_dict: Dict[str, np.ndarray]
+    data_tensor: np.ndarray
+    returns: np.ndarray
+    timestamps: np.ndarray
+    asset_ids: np.ndarray
+    splits: Dict[str, DatasetSplit]
+    processed_df: pd.DataFrame = field(repr=False)
+
+    def get_split(self, name: str) -> DatasetSplit:
+        if name not in self.splits:
+            raise KeyError(f"Unknown split: {name}")
+        return self.splits[name]
+
+
+@dataclass
+class FactorEvaluationArtifact:
+    """Recomputed signals and metrics for one factor."""
+
+    factor_id: int
+    name: str
+    formula: str
+    category: str
+    parse_ok: bool
+    signals_full: Optional[np.ndarray] = None
+    split_signals: Dict[str, np.ndarray] = field(default_factory=dict)
+    split_stats: Dict[str, dict] = field(default_factory=dict)
+    error: str = ""
+
+    @property
+    def succeeded(self) -> bool:
+        return self.parse_ok and self.signals_full is not None and not self.error
+
+
+def load_runtime_dataset(
+    raw_df: pd.DataFrame,
+    cfg,
+) -> EvaluationDataset:
+    """Load raw market data into a canonical evaluation dataset."""
+    from factorminer.data.preprocessor import preprocess
+    from factorminer.data.tensor_builder import TensorConfig, build_tensor
+    from factorminer.data.tensor_builder import compute_target
+
+    raw_df = raw_df.copy()
+    raw_df["datetime"] = pd.to_datetime(raw_df["datetime"])
+
+    target_df = compute_target(raw_df)[["datetime", "asset_id", "target"]]
+    processed_df = preprocess(raw_df)
+    processed_df = processed_df.merge(
+        target_df,
+        on=["datetime", "asset_id"],
+        how="left",
+    )
+    processed_df = processed_df.sort_values(["datetime", "asset_id"]).reset_index(drop=True)
+
+    feature_columns = _resolve_feature_columns(getattr(cfg.data, "features", []))
+    tensor_cfg = TensorConfig(
+        features=feature_columns,
+        backend="numpy",
+        dtype="float64",
+        target_column="target",
+    )
+    dataset = build_tensor(processed_df, tensor_cfg)
+
+    data_tensor = np.asarray(dataset.data, dtype=np.float64)
+    returns = np.asarray(dataset.target, dtype=np.float64)
+    timestamps = pd.to_datetime(dataset.timestamps).to_numpy()
+    asset_ids = np.asarray(dataset.asset_ids)
+
+    if returns.ndim != 2:
+        raise ValueError("Runtime dataset target must be a 2-D (M, T) array")
+
+    data_dict = {
+        COLUMN_TO_FEATURE[column]: data_tensor[:, :, idx]
+        for idx, column in enumerate(dataset.feature_names)
+        if column in COLUMN_TO_FEATURE
+    }
+
+    splits = {
+        "train": _build_named_split(
+            "train",
+            timestamps,
+            returns,
+            start=cfg.data.train_period[0],
+            end=cfg.data.train_period[1],
+        ),
+        "test": _build_named_split(
+            "test",
+            timestamps,
+            returns,
+            start=cfg.data.test_period[0],
+            end=cfg.data.test_period[1],
+        ),
+        "full": DatasetSplit(
+            name="full",
+            indices=np.arange(len(timestamps)),
+            timestamps=timestamps,
+            returns=returns,
+        ),
+    }
+
+    for split_name in ("train", "test"):
+        if splits[split_name].size == 0:
+            raise ValueError(
+                f"{split_name} split is empty for configured period "
+                f"{getattr(cfg.data, f'{split_name}_period')}"
+            )
+
+    return EvaluationDataset(
+        data_dict=data_dict,
+        data_tensor=data_tensor,
+        returns=returns,
+        timestamps=timestamps,
+        asset_ids=asset_ids,
+        splits=splits,
+        processed_df=processed_df,
+    )
+
+
+def evaluate_factors(
+    factors: Sequence[Factor],
+    dataset: EvaluationDataset,
+    signal_failure_policy: str = "reject",
+) -> List[FactorEvaluationArtifact]:
+    """Recompute factor signals and metrics across all dataset splits."""
+    artifacts: List[FactorEvaluationArtifact] = []
+
+    for factor in factors:
+        artifact = FactorEvaluationArtifact(
+            factor_id=factor.id,
+            name=factor.name,
+            formula=factor.formula,
+            category=factor.category,
+            parse_ok=False,
+        )
+
+        tree = try_parse(factor.formula)
+        if tree is None:
+            artifact.error = "Parse failure"
+            artifacts.append(artifact)
+            continue
+
+        artifact.parse_ok = True
+
+        try:
+            signals = compute_tree_signals(
+                tree,
+                dataset.data_dict,
+                dataset.returns.shape,
+                signal_failure_policy=signal_failure_policy,
+            )
+        except Exception as exc:
+            artifact.error = str(exc)
+            artifacts.append(artifact)
+            continue
+
+        if signals is None or np.all(np.isnan(signals)):
+            artifact.error = "Signal computation produced only NaN values"
+            artifacts.append(artifact)
+            continue
+
+        artifact.signals_full = np.asarray(signals, dtype=np.float64)
+
+        for split_name, split in dataset.splits.items():
+            split_signals = artifact.signals_full[:, split.indices]
+            artifact.split_signals[split_name] = split_signals
+            artifact.split_stats[split_name] = compute_factor_stats(
+                split_signals,
+                split.returns,
+            )
+
+        artifacts.append(artifact)
+
+    return artifacts
+
+
+def compute_tree_signals(
+    tree,
+    data_dict: Dict[str, np.ndarray],
+    returns_shape: tuple[int, int],
+    signal_failure_policy: str = "reject",
+) -> np.ndarray:
+    """Evaluate an expression tree under an explicit failure policy."""
+    formula_str = tree.to_string()
+
+    try:
+        signals = tree.evaluate(data_dict)
+    except Exception as exc:
+        return _handle_signal_failure(
+            formula_str=formula_str,
+            returns_shape=returns_shape,
+            signal_failure_policy=signal_failure_policy,
+            cause=exc,
+        )
+
+    if signals is None or np.all(np.isnan(signals)):
+        return _handle_signal_failure(
+            formula_str=formula_str,
+            returns_shape=returns_shape,
+            signal_failure_policy=signal_failure_policy,
+            cause=SignalComputationError("Signal computation produced only NaN values"),
+        )
+
+    return np.asarray(signals, dtype=np.float64)
+
+
+def compute_correlation_matrix(
+    artifacts: Sequence[FactorEvaluationArtifact],
+    split_name: str,
+) -> np.ndarray:
+    """Compute a true pairwise factor correlation matrix on one split."""
+    selected = [a for a in artifacts if a.succeeded]
+    n = len(selected)
+    matrix = np.zeros((n, n), dtype=np.float64)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            corr = compute_pairwise_correlation(
+                selected[i].split_signals[split_name],
+                selected[j].split_signals[split_name],
+            )
+            matrix[i, j] = corr
+            matrix[j, i] = corr
+
+    return matrix
+
+
+def select_top_k(
+    artifacts: Sequence[FactorEvaluationArtifact],
+    split_name: str,
+    top_k: Optional[int] = None,
+) -> List[FactorEvaluationArtifact]:
+    """Sort succeeded artifacts by split abs-IC and return the top-k subset."""
+    succeeded = [a for a in artifacts if a.succeeded]
+    succeeded.sort(
+        key=lambda artifact: abs(
+            artifact.split_stats[split_name].get("ic_abs_mean", 0.0)
+        ),
+        reverse=True,
+    )
+    if top_k is None or top_k >= len(succeeded):
+        return succeeded
+    return succeeded[:top_k]
+
+
+def summarize_failures(
+    artifacts: Sequence[FactorEvaluationArtifact],
+) -> List[str]:
+    """Return human-readable failure summaries."""
+    return [
+        f"{artifact.name or artifact.factor_id}: {artifact.error}"
+        for artifact in artifacts
+        if not artifact.succeeded
+    ]
+
+
+def resolve_split_for_fit_eval(period: str) -> str:
+    """Map fit/eval CLI period values to runtime split names."""
+    return "full" if period == "both" else period
+
+
+def analysis_split_names(period: str) -> List[str]:
+    """Map analysis CLI period values to one or two runtime split names."""
+    if period == "both":
+        return ["train", "test"]
+    return [period]
+
+
+def _resolve_feature_columns(config_features: Sequence[str]) -> List[str]:
+    if not config_features:
+        return list(COLUMN_TO_FEATURE.keys())
+
+    resolved: List[str] = []
+    for feature in config_features:
+        if feature in FEATURE_TO_COLUMN:
+            resolved.append(FEATURE_TO_COLUMN[feature])
+            continue
+        stripped = feature.lstrip("$")
+        if stripped == "amt":
+            stripped = "amount"
+        resolved.append(stripped)
+    return resolved
+
+
+def _build_named_split(
+    name: str,
+    timestamps: np.ndarray,
+    returns: np.ndarray,
+    start: str,
+    end: str,
+) -> DatasetSplit:
+    ts = pd.to_datetime(timestamps)
+    mask = (ts >= pd.Timestamp(start)) & (ts <= pd.Timestamp(end))
+    indices = np.where(mask)[0]
+    return DatasetSplit(
+        name=name,
+        indices=indices,
+        timestamps=timestamps[indices],
+        returns=returns[:, indices],
+    )
+
+
+def _handle_signal_failure(
+    formula_str: str,
+    returns_shape: tuple[int, int],
+    signal_failure_policy: str,
+    cause: Exception,
+) -> np.ndarray:
+    if signal_failure_policy == "raise":
+        raise cause
+
+    if signal_failure_policy == "reject":
+        raise SignalComputationError(
+            f"Expression evaluation failed for '{formula_str}': {cause}"
+        ) from cause
+
+    if signal_failure_policy != "synthetic":
+        raise ValueError(
+            "signal_failure_policy must be one of: reject, synthetic, raise"
+        )
+
+    logger.warning(
+        "Expression evaluation failed for '%s': %s — falling back to synthetic signals",
+        formula_str,
+        cause,
+    )
+    return generate_synthetic_signals(formula_str, returns_shape)
+
+
+def generate_synthetic_signals(
+    formula_str: str,
+    returns_shape: tuple[int, int],
+) -> np.ndarray:
+    """Deterministic pseudo-signals for demo/mock workflows."""
+    m, t = returns_shape
+    seed = hash(formula_str) % (2**31)
+    rng = np.random.RandomState(seed)
+    signals = rng.randn(m, t).astype(np.float64)
+    nan_mask = rng.random((m, t)) < 0.02
+    signals[nan_mask] = np.nan
+    return signals

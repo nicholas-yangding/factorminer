@@ -61,6 +61,11 @@ evaluation:
   # Computation backend: "gpu" (fastest), "numpy" (CPU), or "c" (C extension)
   backend: "gpu"
 
+  # How to handle factor expression failures during evaluation/mining:
+  # "reject" = fail the factor/command, "synthetic" = deterministic fallback,
+  # "raise" = propagate the raw exception.
+  signal_failure_policy: "reject"
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------

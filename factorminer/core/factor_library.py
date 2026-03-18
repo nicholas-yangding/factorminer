@@ -357,6 +357,20 @@ class FactorLibrary:
             old_id, new_factor.id, new_factor.name, new_factor.ic_mean,
         )
 
+    def remove_factor(self, factor_id: int) -> None:
+        """Remove a factor from the library and rebuild correlation state."""
+        if factor_id not in self.factors:
+            raise KeyError(f"Factor {factor_id} not in library")
+
+        removed = self.factors.pop(factor_id)
+        self.update_correlation_matrix()
+
+        logger.info(
+            "Removed factor %d '%s' from library",
+            factor_id,
+            removed.name,
+        )
+
     # ------------------------------------------------------------------
     # Correlation matrix management
     # ------------------------------------------------------------------

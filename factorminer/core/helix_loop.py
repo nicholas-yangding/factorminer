@@ -504,6 +504,7 @@ class HelixLoop(RalphLoop):
         # Phase 2 extended validation on admitted candidates
         rejected_by_phase2 = self._helix_validate(results, admitted_results)
         helix_stats["phase2_rejections"] = rejected_by_phase2
+        surviving_admissions = [r for r in admitted_results if r.admitted]
 
         # ==================================================================
         # Stage 5: DISTILL
@@ -525,7 +526,7 @@ class HelixLoop(RalphLoop):
         # Build stats
         elapsed = time.time() - t0
         self.budget.record_compute(elapsed)
-        stats = self._compute_stats(results, admitted_results, elapsed)
+        stats = self._compute_stats(results, surviving_admissions, elapsed)
         stats.update(helix_stats)
         stats["iteration"] = self.iteration
 
@@ -717,12 +718,12 @@ class HelixLoop(RalphLoop):
             self._no_admission_streak += 1
             return 0
 
-        self._no_admission_streak = 0
         rejected = 0
 
         # Collect admitted results that still have signals for extended checks
         to_check = [r for r in admitted_results if r.signals is not None]
         if not to_check:
+            self._no_admission_streak = 0 if any(r.admitted for r in admitted_results) else self._no_admission_streak + 1
             return 0
 
         # -- Causal validation --
@@ -747,6 +748,11 @@ class HelixLoop(RalphLoop):
                 rejected,
                 len(admitted_results),
             )
+
+        if any(r.admitted for r in admitted_results):
+            self._no_admission_streak = 0
+        else:
+            self._no_admission_streak += 1
 
         return rejected
 
@@ -959,7 +965,7 @@ class HelixLoop(RalphLoop):
                     factor.name == result.factor_name
                     and factor.formula == result.formula
                 ):
-                    del self.library.factors[factor.id]
+                    self.library.remove_factor(factor.id)
                     logger.debug(
                         "Helix: revoked factor '%s' (id=%d): %s",
                         result.factor_name,

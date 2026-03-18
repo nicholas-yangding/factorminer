@@ -1,9 +1,4 @@
-"""Enhanced memory retrieval combining Knowledge Graph + Embeddings + flat memory.
-
-Augments the base :func:`retrieve_memory` signal with structural and
-semantic information derived from the factor knowledge graph and formula
-embeddings.
-"""
+"""Enhanced memory retrieval combining Knowledge Graph + Embeddings + flat memory."""
 
 from __future__ import annotations
 
@@ -36,16 +31,8 @@ def retrieve_memory_enhanced(
     """Enhanced memory retrieval operator R+(M, L, KG, E).
 
     Calls the base :func:`retrieve_memory` first, then augments the
-    returned dict with additional keys derived from the knowledge graph
-    and embedder:
-
-    - ``complementary_patterns`` -- factor IDs that are structurally
-      complementary to recently admitted factors.
-    - ``conflict_warnings`` -- sets of factor IDs that form saturated
-      (highly correlated) clusters.
-    - ``operator_cooccurrence`` -- top operator pairs in admitted factors.
-    - ``semantic_gaps`` -- operator names that appear in success patterns
-      but are under-represented in the current library.
+    returned dict with additional prompt-oriented keys derived from the
+    knowledge graph and embedder.
 
     Parameters
     ----------
@@ -77,7 +64,7 @@ def retrieve_memory_enhanced(
     # Default augmented keys
     result["complementary_patterns"] = []
     result["conflict_warnings"] = []
-    result["operator_cooccurrence"] = {}
+    result["operator_cooccurrence"] = []
     result["semantic_gaps"] = []
 
     # ----------------------------------------------------------------
@@ -95,22 +82,22 @@ def retrieve_memory_enhanced(
             for comp in kg.find_complementary_patterns(fid, max_hops=2):
                 if comp not in seen:
                     seen.add(comp)
-                    complementary.append(comp)
+                    complementary.append(_describe_factor_node(kg, comp))
         result["complementary_patterns"] = complementary
 
         # Conflict warnings: saturated regions
         saturated_regions = kg.find_saturated_regions(threshold=0.5)
         result["conflict_warnings"] = [
-            sorted(region) for region in saturated_regions
+            _describe_conflict_cluster(kg, region) for region in saturated_regions
         ]
 
         # Operator co-occurrence
         cooc = kg.get_operator_cooccurrence()
         # Sort by count descending, take top 20
         top_cooc = sorted(cooc.items(), key=lambda x: x[1], reverse=True)[:20]
-        result["operator_cooccurrence"] = {
-            f"{a}+{b}": count for (a, b), count in top_cooc
-        }
+        result["operator_cooccurrence"] = [
+            f"{a} + {b} (seen {count} times)" for (a, b), count in top_cooc
+        ]
 
     # ----------------------------------------------------------------
     # Embedding-based augmentations
@@ -204,3 +191,38 @@ def _find_semantic_gaps(
 
     gaps = template_ops - used_ops
     return sorted(gaps)
+
+
+def _describe_factor_node(
+    kg: FactorKnowledgeGraph,  # type: ignore[type-arg]
+    factor_id: str,
+) -> str:
+    """Render a factor node into short prompt-friendly text."""
+    try:
+        attrs = kg._graph.nodes.get(factor_id, {})
+        data = attrs.get("data", {})
+    except Exception:
+        return factor_id
+
+    category = data.get("category", "") or "unknown"
+    ic_mean = data.get("ic_mean")
+    formula = data.get("formula", "")
+    summary = factor_id
+    if category:
+        summary += f" [{category}]"
+    if ic_mean is not None:
+        summary += f" IC={float(ic_mean):.4f}"
+    if formula:
+        summary += f": {formula[:80]}"
+        if len(formula) > 80:
+            summary += "..."
+    return summary
+
+
+def _describe_conflict_cluster(
+    kg: FactorKnowledgeGraph,  # type: ignore[type-arg]
+    cluster: Set[str],
+) -> str:
+    """Render one saturated cluster into short text."""
+    described = [_describe_factor_node(kg, factor_id) for factor_id in sorted(cluster)]
+    return " | ".join(described[:3])

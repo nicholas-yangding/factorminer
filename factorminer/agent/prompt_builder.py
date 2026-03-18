@@ -228,6 +228,43 @@ class PromptBuilder:
                 + "\n".join(f"  Note: {ins}" for ins in insights)
             )
 
+        helix_prompt_text = memory_signal.get("prompt_text", "").strip()
+        if helix_prompt_text:
+            sections.append(
+                "\n## HELIX RETRIEVAL SUMMARY\n"
+                f"{helix_prompt_text}"
+            )
+
+        complementary_patterns = memory_signal.get("complementary_patterns", [])
+        if complementary_patterns:
+            sections.append(
+                "\n## COMPLEMENTARY PATTERNS\n"
+                + "\n".join(f"  + {pattern}" for pattern in complementary_patterns)
+            )
+
+        conflict_warnings = memory_signal.get("conflict_warnings", [])
+        if conflict_warnings:
+            sections.append(
+                "\n## SATURATION WARNINGS\n"
+                + "\n".join(f"  ! {warning}" for warning in conflict_warnings)
+            )
+
+        operator_cooccurrence = memory_signal.get("operator_cooccurrence", [])
+        if operator_cooccurrence:
+            sections.append(
+                "\n## OPERATOR CO-OCCURRENCE PRIORS\n"
+                + "\n".join(f"  - {pair}" for pair in operator_cooccurrence)
+            )
+
+        semantic_gaps = memory_signal.get("semantic_gaps", [])
+        if semantic_gaps:
+            sections.append(
+                "\n## SEMANTIC GAPS\n"
+                + "\n".join(
+                    f"  - Underused but promising: {gap}" for gap in semantic_gaps
+                )
+            )
+
         # --- Recent rejection reasons ---
         rejections = memory_signal.get("recent_rejections", [])
         if rejections:

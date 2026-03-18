@@ -49,6 +49,7 @@ from factorminer.evaluation.metrics import (
     compute_ic_win_rate,
     compute_icir,
 )
+from factorminer.evaluation.runtime import SignalComputationError, compute_tree_signals
 from factorminer.utils.logging import (
     IterationRecord,
     FactorRecord,
@@ -237,6 +238,7 @@ class ValidationPipeline:
         self.replacement_ic_ratio = replacement_ic_ratio
         self.fast_screen_assets = fast_screen_assets
         self.num_workers = num_workers
+        self.signal_failure_policy = "reject"
 
         # Pre-compute the fast-screen asset subset indices
         M = returns.shape[0]
@@ -277,7 +279,7 @@ class ValidationPipeline:
         # Stage 1: Compute signals and fast IC screening
         try:
             signals = self._compute_signals(tree)
-        except Exception as exc:
+        except SignalComputationError as exc:
             result.rejection_reason = f"Signal computation error: {exc}"
             result.stage_passed = 0
             return result
@@ -503,33 +505,15 @@ class ValidationPipeline:
 
         Evaluates the parsed expression tree against the market data using
         the tree's own ``evaluate()`` method which dispatches through the
-        numpy operator implementations.
-
-        Falls back to deterministic pseudo-signals only when evaluation
-        raises an unexpected error (and logs a warning).
+        numpy operator implementations under the configured failure policy.
         """
-        try:
-            data_dict = self._build_data_dict()
-            result = tree.evaluate(data_dict)
-            return result
-        except Exception as exc:
-            formula_str = tree.to_string()
-            logger.warning(
-                "Expression evaluation failed for '%s': %s  — "
-                "falling back to pseudo-signals",
-                formula_str,
-                exc,
-            )
-
-        # Fallback: deterministic pseudo-signals from formula hash
-        M, T = self.returns.shape
-        formula_str = tree.to_string()
-        seed = hash(formula_str) % (2**31)
-        rng = np.random.RandomState(seed)
-        signals = rng.randn(M, T).astype(np.float64)
-        nan_mask = rng.random((M, T)) < 0.02
-        signals[nan_mask] = np.nan
-        return signals
+        data_dict = self._build_data_dict()
+        return compute_tree_signals(
+            tree,
+            data_dict,
+            self.returns.shape,
+            signal_failure_policy=self.signal_failure_policy,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -643,10 +627,14 @@ class RalphLoop:
             fast_screen_assets=getattr(config, "fast_screen_assets", 100),
             num_workers=getattr(config, "num_workers", 1),
         )
+        self.pipeline.signal_failure_policy = getattr(
+            config, "signal_failure_policy", "reject"
+        )
         self.reporter = MiningReporter(
             getattr(config, "output_dir", "./output")
         )
         self.budget = BudgetTracker()
+        self.signal_failure_policy = getattr(config, "signal_failure_policy", "reject")
 
         # Session state
         self.iteration = 0

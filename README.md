@@ -1,374 +1,269 @@
 # FactorMiner
 
-**A Self-Evolving Agent with Skills and Experience Memory for Financial Alpha Discovery**
+**LLM-driven formulaic alpha mining with experience memory, strict recomputation, and a Phase 2 Helix loop**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-FactorMiner is an LLM-powered framework for automated discovery of interpretable formulaic alpha factors. It combines a modular mining skill architecture with structured experience memory to iteratively explore the vast space of factor expressions while avoiding redundancy.
+FactorMiner is a research framework for discovering interpretable alpha factors from market data using a typed DSL, an LLM generation loop, structured memory, and a library admission process built around predictive power and orthogonality.
 
-Based on the paper: *FactorMiner: A Self-Evolving Agent with Skills and Experience Memory for Financial Alpha Discovery* (Wang et al., 2026) &mdash; [arXiv:2602.14670](https://arxiv.org/abs/2602.14670)
+The implementation is based on *FactorMiner: A Self-Evolving Agent with Skills and Experience Memory for Financial Alpha Discovery* (Wang et al., 2026), with an extended Helix-style Phase 2 surface for canonicalization, knowledge-graph retrieval, debate generation, and deeper post-admission validation.
 
----
+## What Is In The Repo
 
-## Overview
+- `RalphLoop` for iterative factor mining with retrieval, generation, evaluation, admission, and memory updates
+- `HelixLoop` for enhanced Phase 2 mining with debate, canonicalization, retrieval enrichments, and optional post-admission validation
+- 110 paper factors shipped in `library_io.py`
+- 60+ operators across arithmetic, statistical, time-series, smoothing, cross-sectional, regression, and logical categories
+- A parser + expression tree DSL over the canonical feature set:
+  `$open`, `$high`, `$low`, `$close`, `$volume`, `$amt`, `$vwap`, `$returns`
+- Analysis commands that now recompute signals on the supplied dataset instead of trusting stored library metadata
+- Combination and portfolio evaluation utilities
+- Visualization and tear sheet generation
+- Mock/demo flows for local end-to-end testing without API keys
 
-Formulaic alpha factor mining is central to quantitative trading. The search space of operator compositions is combinatorially vast, and as a factor library grows, finding novel signals that are both predictive and orthogonal to existing factors becomes increasingly difficult (the "Correlation Red Sea" problem).
+## Setup
 
-FactorMiner addresses this through two synergistic mechanisms:
+### Recommended: `uv`
 
-1. **Modular Skill Architecture** &mdash; Factor mining is encapsulated as a reusable Agent Skill with 60+ typed financial operators, a multi-stage validation pipeline (IC screening, correlation checking, deduplication, full validation), and standardized evaluation protocols.
-
-2. **Experience Memory** &mdash; A structured knowledge base that accumulates insights across mining sessions: successful patterns (templates that consistently pass quality thresholds), forbidden regions (factor families with high correlation to existing library members), and strategic insights. The memory guides future exploration away from known dead ends and toward promising directions.
-
-The system implements the **Ralph Loop** paradigm: *retrieve* memory priors, *generate* candidates via LLM, *evaluate* through the multi-stage pipeline, *admit* to the library, and *distill* outcomes back into memory.
-
-## Key Features
-
-- **110 pre-built alpha factors** from the paper with explicit formulaic expressions, validated on A-share equities and cryptocurrency markets
-- **60+ typed financial operators** across 7 categories (arithmetic, statistical, time-series, cross-sectional, smoothing, regression, logical) with GPU-accelerated backends
-- **Expression tree DSL** &mdash; domain-specific language for composing factor formulas as symbolic expression trees with recursive descent parsing
-- **Multi-stage validation pipeline** &mdash; 4-stage cascade (fast IC screen &rarr; correlation check &rarr; batch deduplication &rarr; full validation) with factor replacement mechanism
-- **Experience memory system** &mdash; formation, evolution, and retrieval operators for accumulating structural knowledge across mining sessions
-- **Factor combination** &mdash; equal-weight, IC-weighted, and Gram-Schmidt orthogonal strategies
-- **Factor selection** &mdash; Lasso, forward stepwise, and XGBoost methods
-- **SymPy canonicalization** &mdash; algebraic equivalence detection (e.g., `Neg(Neg($close))` == `$close`)
-- **Regime-aware evaluation** &mdash; market regime detection (bull/bear/neutral) with per-regime IC analysis
-- **Statistical significance testing** &mdash; bootstrap confidence intervals, FDR correction, deflated Sharpe ratio
-- **Knowledge graph memory** &mdash; graph-based representation of factor relationships, operator co-occurrence, and saturated clusters
-- **Multi-backend acceleration** &mdash; NumPy (CPU), C-compiled (bottleneck), and PyTorch/CUDA (GPU) backends with 8&ndash;59x speedups
-
-## Architecture
-
-```
-                    ┌─────────────────────────────┐
-                    │   EXPERIENCE MEMORY (M)      │
-                    │  P_succ │ P_fail │ Insights  │
-                    └────┬────────────────┬────────┘
-                         │                │
-                  1. RETRIEVE        5. DISTILL
-                         │                │
-                         ▼                │
-┌──────────┐    ┌────────────────┐    ┌───┴──────────────┐
-│  MARKET  │───▶│  AGENT SKILL   │───▶│  FACTOR LIBRARY  │
-│  DATA    │    │                │    │                  │
-│  (D)     │    │ 2. GENERATE    │    │  4. ADMIT/       │
-│          │    │    (LLM + Ω)   │    │     REPLACE      │
-└──────────┘    │                │    └──────────────────┘
-                │ 3. EVALUATE    │
-                │  Stage 1: IC   │
-                │  Stage 2: Corr │
-                │  Stage 3: Dedup│
-                │  Stage 4: Full │
-                └────────────────┘
-```
-
-## Project Structure
-
-```
-alphadisk/
-├── pyproject.toml                  # Package config and dependencies
-├── run_demo.py                     # End-to-end demo (no API keys needed)
-├── 2602.14670v1.pdf                # Source paper
-├── data/
-│   └── binance_crypto_5m.csv       # Sample Binance crypto 5-min bars
-├── output/                         # Mining session outputs
-│   ├── factor_library.json         # Discovered factor library
-│   ├── mining.log                  # Detailed mining log
-│   ├── mining_batches.jsonl        # Batch-level results
-│   ├── session.json                # Session metadata
-│   └── session_log.json            # Session event log
-└── factorminer/                    # Main package
-    ├── core/
-    │   ├── expression_tree.py      # DAG-based factor expression trees
-    │   ├── parser.py               # Recursive descent formula parser
-    │   ├── factor_library.py       # Factor library with admission/replacement
-    │   ├── ralph_loop.py           # Main mining loop (Algorithm 1)
-    │   ├── helix_loop.py           # Extended loop with Phase 2 features
-    │   ├── canonicalizer.py        # SymPy-based formula canonicalization
-    │   ├── config.py               # Mining configuration
-    │   ├── session.py              # Session persistence and resume
-    │   ├── library_io.py           # Library serialization + 110 paper factors
-    │   └── types.py                # Operator specs and type system
-    ├── agent/
-    │   ├── llm_interface.py        # LLM provider abstraction (+ MockProvider)
-    │   ├── factor_generator.py     # LLM-based factor generation
-    │   ├── prompt_builder.py       # Prompt construction with memory injection
-    │   ├── output_parser.py        # Parse LLM output to CandidateFactor
-    │   ├── debate.py               # Multi-agent debate framework
-    │   ├── critic.py               # Quality validation critic
-    │   └── specialists.py          # Domain-specialist generators
-    ├── operators/
-    │   ├── registry.py             # Central operator registry
-    │   ├── arithmetic.py           # Add, Sub, Mul, Div, Log, Sqrt, ...
-    │   ├── statistical.py          # Mean, Std, Skew, Kurt, Median, ...
-    │   ├── timeseries.py           # Delta, Delay, Corr, Cov, Beta, ...
-    │   ├── crosssectional.py       # CsRank, CsZScore, CsDemean, ...
-    │   ├── smoothing.py            # EMA, SMA, WMA, KAMA, HMA
-    │   ├── regression.py           # Slope, Rsquare, Resi (rolling OLS)
-    │   ├── logical.py              # IfElse, Greater, Less, And, Or
-    │   ├── gpu_backend.py          # PyTorch/CUDA implementations
-    │   ├── custom.py               # User-defined operators
-    │   └── auto_inventor.py        # Automatic operator discovery
-    ├── evaluation/
-    │   ├── metrics.py              # IC, ICIR, win rate, factor stats
-    │   ├── pipeline.py             # Multi-stage validation pipeline
-    │   ├── admission.py            # Admission and replacement logic
-    │   ├── correlation.py          # Pairwise Spearman correlation
-    │   ├── combination.py          # EW, IC-weighted, orthogonal combination
-    │   ├── selection.py            # Lasso, stepwise, XGBoost selection
-    │   ├── backtest.py             # Backtesting framework
-    │   ├── portfolio.py            # Portfolio construction
-    │   ├── regime.py               # Market regime detection
-    │   ├── significance.py         # Bootstrap CI, FDR, deflated Sharpe
-    │   ├── causal.py               # Causal factor analysis
-    │   └── capacity.py             # Factor capacity estimation
-    ├── memory/
-    │   ├── memory_store.py         # Experience memory data structures
-    │   ├── formation.py            # Memory formation operator F
-    │   ├── evolution.py            # Memory evolution operator E
-    │   ├── retrieval.py            # Memory retrieval operator R
-    │   ├── knowledge_graph.py      # Factor knowledge graph
-    │   ├── kg_retrieval.py         # KG-based retrieval
-    │   ├── embeddings.py           # Formula/pattern embeddings
-    │   └── experience_memory.py    # Unified memory interface
-    ├── data/
-    │   ├── loader.py               # CSV/Parquet/HDF5 data loading
-    │   ├── preprocessor.py         # Cleaning, NaN handling, normalization
-    │   ├── tensor_builder.py       # DataFrame to (M, T) array conversion
-    │   └── mock_data.py            # Synthetic OHLCV data generation
-    ├── utils/
-    │   ├── logging.py              # Session logging and iteration tracking
-    │   ├── visualization.py        # IC plots, correlation heatmaps
-    │   ├── tearsheet.py            # Factor tearsheet generation
-    │   └── reporting.py            # HTML/PDF/Markdown reports
-    ├── configs/
-    │   └── __init__.py             # Configuration defaults
-    └── tests/                      # Comprehensive pytest suite
-        ├── test_expression_tree.py
-        ├── test_operators.py
-        ├── test_library.py
-        ├── test_data.py
-        ├── test_evaluation.py
-        ├── test_memory.py
-        ├── test_ralph_loop.py
-        ├── test_combination.py
-        ├── test_regime.py
-        ├── test_significance.py
-        ├── test_knowledge_graph.py
-        ├── test_helix_loop.py
-        ├── test_debate.py
-        └── conftest.py
-```
-
-## Installation
+FactorMiner now supports a clean `uv` workflow for local development and reproducible setup.
 
 ```bash
-# Clone the repository
-git clone https://github.com/factorminer/factorminer.git
+git clone https://github.com/minihellboy/factorminer.git
 cd factorminer
 
-# Install base package
-pip install -e .
+# Base runtime + dev tools
+uv sync --group dev
 
-# Install with LLM support (OpenAI, Anthropic, Google)
-pip install -e ".[llm]"
+# Add LLM providers / embedding stack
+uv sync --group dev --extra llm
 
-# Install with GPU acceleration
-pip install -e ".[gpu]"
-
-# Install everything (GPU + LLM + dev tools)
-pip install -e ".[all]"
+# Full local setup
+uv sync --group dev --all-extras
 ```
 
-**Requirements:** Python 3.10+
+Notes:
+
+- The GPU extra is marked Linux-only because `cupy-cuda12x` is not generally installable on macOS.
+- `uv sync --group dev --all-extras` is the intended "full environment" path for contributors.
+- After syncing, use `uv run ...` for every command shown below.
+
+### `pip` fallback
+
+```bash
+python3 -m pip install -e .
+python3 -m pip install -e ".[llm]"
+python3 -m pip install -e ".[all]"
+```
 
 ## Quick Start
 
-### Run the Demo (No API Keys Needed)
-
-The demo runs the full pipeline on synthetic data using a MockProvider for LLM generation:
+### Demo without API keys
 
 ```bash
-python run_demo.py
+uv run python run_demo.py
 ```
 
-This demonstrates:
-1. Synthetic market data generation (100 assets, 500 periods)
-2. Evaluation of the paper's 110 factors
-3. Factor library construction with admission rules (IC > 0.02, correlation < 0.5)
-4. Factor combination (equal-weight, IC-weighted, orthogonal)
-5. Regime detection (bull/bear/neutral)
-6. Statistical significance testing (bootstrap CI + FDR)
-7. SymPy formula canonicalization
-8. Knowledge graph memory
-9. Mining loop (3 iterations)
+The demo uses synthetic market data and a mock LLM provider. It explicitly uses synthetic fallback for signal failures so local experiments do not get blocked by strict benchmark behavior.
 
-### Run with a Real LLM
+### CLI overview
 
 ```bash
-# Set your API key
-export ANTHROPIC_API_KEY=sk-ant-...
-# or
-export OPENAI_API_KEY=sk-...
-
-# Run the mining loop
-factorminer mine --config factorminer/configs/default.yaml
+uv run factorminer --help
 ```
 
-### Run with Real Market Data
+Available commands:
 
-Place a CSV file with columns `[datetime, asset_id, open, high, low, close, volume, amount]` at `data/market.csv` and update the config accordingly.
+- `mine`: run the Ralph mining loop
+- `helix`: run the enhanced Phase 2 Helix loop
+- `evaluate`: recompute and score a saved factor library on train/test/full splits
+- `combine`: fit a factor subset on one split and evaluate composites on another
+- `visualize`: generate recomputed correlation, IC, quintile, and tear sheet outputs
+- `export`: export a library as JSON, CSV, or formulas
 
-A sample Binance crypto dataset (`data/binance_crypto_5m.csv`) is included.
+## Common Workflows
 
-## Factor Expression Language
-
-Factors are defined as symbolic expression trees using a domain-specific language:
-
-```python
-from factorminer.core.parser import parse
-
-# Simple momentum factor
-tree = parse("Neg(CsRank(Delta($close, 3)))")
-
-# VWAP deviation
-tree = parse("Neg(Div(Sub($close, $vwap), $vwap))")
-
-# Regime-switching factor with conditional logic
-tree = parse("""
-    IfElse(Greater(Std($returns, 12), Mean(Std($returns, 12), 48)),
-           Neg(CsRank(Delta($close, 3))),
-           Neg(CsRank(Div(Sub($close, $low), Add(Sub($high, $low), 0.0001)))))
-""")
-
-# Evaluate on data
-import numpy as np
-data = {"$close": close_array, "$high": high_array, ...}  # shape (M, T)
-signals = tree.evaluate(data)  # shape (M, T)
-```
-
-### Available Features
-
-| Feature | Description |
-|---------|-------------|
-| `$open` | Open price |
-| `$high` | High price |
-| `$low` | Low price |
-| `$close` | Close price |
-| `$volume` | Trading volume |
-| `$amt` | Trading amount |
-| `$vwap` | Volume-weighted average price |
-| `$returns` | Log returns |
-
-### Operator Categories
-
-| Category | Representative Operators | Description |
-|----------|------------------------|-------------|
-| Arithmetic | Add, Sub, Mul, Div, Neg, Log, Sqrt, Abs | Element-wise transformations |
-| Statistical | Mean, Std, Skew, Kurt, Median, Sum | Rolling window statistics |
-| Time-series | Delta, Delay, TsRank, TsMax, TsMin, TsDecay | Temporal pattern capture |
-| Cross-sectional | CsRank, CsZScore, CsDemean, Scale | Cross-asset transforms |
-| Smoothing | SMA, EMA, WMA, KAMA, HMA | Trend extraction |
-| Regression | Slope, Rsquare, Resi | Rolling OLS trend/residuals |
-| Logical | IfElse, Greater, Less, And, Or | Conditional regime switching |
-
-## Core Concepts
-
-### The Ralph Loop (Algorithm 1)
-
-The mining loop iterates through five stages:
-
-```
-repeat until |L| >= K or budget exhausted:
-    1. RETRIEVE: m <- R(M, L)           # Get memory priors
-    2. GENERATE: C ~ pi(alpha | m)      # LLM generates candidates
-    3. EVALUATE:                         # Multi-stage validation
-       Stage 1: Fast IC screening (subset of assets)
-       Stage 2: Correlation check against library
-       Stage 2.5: Replacement check for high-IC correlated factors
-       Stage 3: Intra-batch deduplication
-       Stage 4: Full validation (all assets)
-    4. ADMIT: L <- L ∪ C_admitted       # Update library
-    5. DISTILL: M <- E(M, F(tau))       # Update memory
-```
-
-### Admission Criteria
-
-A factor alpha is admitted to the library L if:
-
-- **IC gate:** |IC(alpha)| >= tau_IC (default: 0.04 for A-shares)
-- **Correlation gate:** max |rho(alpha, g)| < theta for all g in L (default: theta = 0.5)
-
-A **replacement** occurs when a high-IC candidate is correlated with exactly one existing factor and exceeds it by 30%+.
-
-### Experience Memory
-
-The memory M stores three types of knowledge:
-
-- **Successful Patterns (P_succ):** Templates that consistently produce admitted factors (e.g., "higher moment regimes via Skew/Kurt", "price-volume correlation interaction")
-- **Forbidden Directions (P_fail):** Regions identified as "Red Seas" due to persistent high correlation (e.g., "VWAP Deviation variants", "simple Delta reversals")
-- **Strategic Insights (I):** High-level lessons (e.g., "non-linear combination via XGBoost outperforms linear")
-
-## Evaluation Metrics
-
-| Metric | Description |
-|--------|-------------|
-| **IC** | Spearman rank correlation between factor signal and forward returns |
-| **ICIR** | IC mean / IC std &mdash; measures consistency |
-| **IC Win Rate** | Fraction of periods with positive IC |
-| **Avg \|rho\|** | Average pairwise absolute correlation in library |
-| **Monotonicity** | Whether quintile returns are monotonically ordered |
-| **Turnover** | Average daily portfolio turnover |
-
-## Testing
+### 1. Mine with mock data
 
 ```bash
-# Run all tests
-pytest factorminer/tests/ -v
-
-# Run specific test module
-pytest factorminer/tests/test_expression_tree.py -v
-pytest factorminer/tests/test_ralph_loop.py -v
+uv run factorminer --cpu mine --mock -n 2 -b 8 -t 10
 ```
+
+### 2. Run Helix with selected Phase 2 features
+
+```bash
+uv run factorminer --cpu helix --mock --debate --canonicalize -n 2 -b 8 -t 10
+```
+
+### 3. Evaluate a saved library with strict recomputation
+
+```bash
+uv run factorminer --cpu evaluate output/factor_library.json --mock --period both --top-k 10
+```
+
+Behavior:
+
+- Signals are recomputed from formulas on the supplied dataset.
+- `train_period` and `test_period` from config define the authoritative split boundaries.
+- `--period both` compares the same factor set across train and test and prints a decay summary.
+
+### 4. Combine factors with explicit fit/eval splits
+
+```bash
+uv run factorminer --cpu combine output/factor_library.json \
+  --mock \
+  --fit-period train \
+  --eval-period test \
+  --method all \
+  --selection lasso \
+  --top-k 20
+```
+
+Behavior:
+
+- top-k selection is based on recomputed fit-split metrics
+- optional selection runs on the fit split
+- portfolio evaluation runs on the eval split
+- no pseudo-signal fallback is used in benchmark-facing analysis paths
+
+### 5. Visualize recomputed artifacts
+
+```bash
+uv run factorminer --cpu visualize output/factor_library.json \
+  --mock \
+  --period test \
+  --correlation \
+  --ic-timeseries \
+  --quintile \
+  --tearsheet
+```
+
+Behavior:
+
+- correlation heatmaps are built from recomputed factor-factor correlation
+- IC plots use actual IC series from recomputed signals
+- quintile plots and tear sheets use actual returns, not library-level summary metadata
 
 ## Configuration
 
-Mining parameters are set via `MiningConfig`:
+The default config lives at [`factorminer/configs/default.yaml`](factorminer/configs/default.yaml).
 
-```python
-from factorminer.core.config import MiningConfig
+Key top-level fields:
 
-config = MiningConfig(
-    target_library_size=110,   # Target number of factors
-    batch_size=40,             # Candidates per iteration
-    max_iterations=200,        # Maximum mining iterations
-    ic_threshold=0.04,         # Minimum |IC| for admission
-    correlation_threshold=0.5, # Maximum pairwise |rho|
-    fast_screen_assets=50,     # Assets for Stage 1 screening
-    num_workers=40,            # Parallel evaluation workers
-    backend="numpy",           # "numpy", "c", or "gpu"
-)
+- `data_path`: optional source file path when not using `--data`
+- `output_dir`: default output directory for libraries, logs, and plots
+- `mining`: Ralph/Helix mining thresholds and loop controls
+- `evaluation`: backend, worker count, and strictness policy
+- `data`: canonical features plus train/test split windows
+- `llm`: provider, model, API key, and sampling settings
+- `memory`: experience-memory retention settings
+- `phase2`: Helix-specific toggles and validation modules
+
+### Signal failure policy
+
+`evaluation.signal_failure_policy` controls what happens when a factor formula cannot be recomputed:
+
+- `reject`: fail the factor or abort the benchmark path
+- `synthetic`: use deterministic pseudo-signals for demo/mock flows
+- `raise`: propagate the raw exception for debugging
+
+Defaults:
+
+- analysis commands use `reject`
+- `mine --mock`, `helix --mock`, and `run_demo.py` use `synthetic`
+
+### Split semantics
+
+`data.train_period` and `data.test_period` are the source of truth for:
+
+- `evaluate --period train|test|both`
+- `combine --fit-period ... --eval-period ...`
+- `visualize --period train|test|both`
+
+## Data Format
+
+Input data is expected to contain market bars with at least:
+
+```text
+datetime, asset_id, open, high, low, close, volume, amount
 ```
 
-## Citation
+If `vwap` or `returns` are not present, the runtime layer derives them.
 
-```bibtex
-@inproceedings{wang2026factorminer,
-  title={FactorMiner: A Self-Evolving Agent with Skills and Experience Memory for Financial Alpha Discovery},
-  author={Wang, Yanlong and Xu, Jian and Zhang, Hongkang and Huang, Shao-Lun and Sun, Danny Dongning and Zhang, Xiao-Ping},
-  booktitle={Preprint},
-  year={2026},
-  publisher={ACM},
-  address={New York, NY, USA},
-  url={https://arxiv.org/abs/2602.14670}
-}
+Mock data generation is available through `--mock` and `run_demo.py`.
+
+## Helix / Phase 2
+
+The Helix surface extends the base Ralph loop with additional tooling:
+
+- debate generation via specialist agents
+- SymPy canonicalization
+- knowledge-graph retrieval
+- embedding-assisted retrieval
+- auto-inventor hooks
+- optional causal, regime, capacity, and significance validation modules
+
+Prompt construction now consumes structured Helix retrieval signals, including:
+
+- complementary patterns
+- conflict warnings / saturation warnings
+- operator co-occurrence priors
+- semantic gaps
+- plain-language retrieval summaries
+
+## Analysis Integrity
+
+Recent changes in this repo tightened the benchmark surface:
+
+- `evaluate`, `combine`, and `visualize` now recompute from the supplied dataset
+- CLI top-k selection is based on recomputed split metrics
+- Helix/Ralph use an explicit signal-failure policy
+- mock/demo paths preserve convenience without leaking synthetic fallback into benchmark commands
+
+This means saved library metadata is no longer treated as the final source of truth for analysis.
+
+## Development
+
+### Run tests
+
+```bash
+uv run pytest -q factorminer/tests
 ```
+
+### Build the wheel
+
+```bash
+uv run python -m pip wheel --no-deps . -w dist
+```
+
+### Lint
+
+```bash
+uv run ruff check .
+```
+
+## Project Layout
+
+```text
+factorminer/
+├── agent/         LLM providers, prompt builders, debate, specialists
+├── configs/       Default YAML configuration
+├── core/          Parser, expression trees, loops, factor library, serialization
+├── data/          Loaders, preprocessing, tensor building, mock data
+├── evaluation/    Metrics, runtime recomputation, combination, portfolio, validation
+├── memory/        Experience memory, KG retrieval, embeddings
+├── operators/     Operator registry and implementations
+├── tests/         Pytest suite
+└── utils/         Config loading, plotting, tear sheets, reporting
+```
+
+## Packaging Notes
+
+- The project now uses `setuptools.build_meta` as its build backend.
+- `uv` is the recommended local workflow.
+- `uv.lock` is generated and should be refreshed when dependency metadata changes.
+- The repo metadata points at the current GitHub project: [minihellboy/factorminer](https://github.com/minihellboy/factorminer).
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
-
-## Disclaimer
-
-This software is for research and educational purposes. The discovered factors should not be used directly for live trading without proper risk management, compliance review, and transaction cost analysis. The authors are not responsible for any financial losses incurred from the use of this software.
+MIT. See [`LICENSE`](LICENSE).

@@ -52,6 +52,7 @@ class EvaluationConfig:
     fast_screen_assets: int = 100
     gpu_device: str = "cuda:0"
     backend: str = "gpu"
+    signal_failure_policy: str = "reject"
 
     def validate(self) -> None:
         if self.num_workers < 1:
@@ -60,6 +61,10 @@ class EvaluationConfig:
             raise ValueError("fast_screen_assets must be >= 1")
         if self.backend not in ("gpu", "numpy", "c"):
             raise ValueError(f"backend must be one of: gpu, numpy, c (got '{self.backend}')")
+        if self.signal_failure_policy not in ("reject", "synthetic", "raise"):
+            raise ValueError(
+                "signal_failure_policy must be one of: reject, synthetic, raise"
+            )
 
 
 @dataclass
@@ -106,8 +111,11 @@ class LLMConfig:
     batch_candidates: int = 40
 
     def validate(self) -> None:
-        if self.provider not in ("google", "openai", "anthropic"):
-            raise ValueError(f"provider must be one of: google, openai, anthropic (got '{self.provider}')")
+        if self.provider not in ("google", "openai", "anthropic", "mock"):
+            raise ValueError(
+                f"provider must be one of: google, openai, anthropic, mock "
+                f"(got '{self.provider}')"
+            )
         if not (0.0 <= self.temperature <= 2.0):
             raise ValueError("temperature must be in [0, 2]")
         if self.max_tokens < 1:

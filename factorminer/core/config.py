@@ -33,6 +33,7 @@ class MiningConfig:
     output_dir: str = "./output"
     gpu_device: str = "cuda:0"
     backend: str = "numpy"
+    signal_failure_policy: str = "reject"
 
     def validate(self) -> None:
         """Basic sanity checks on parameter values."""
@@ -53,4 +54,8 @@ class MiningConfig:
         if self.backend not in ("gpu", "numpy", "c"):
             raise ValueError(
                 f"backend must be one of: gpu, numpy, c (got '{self.backend}')"
+            )
+        if self.signal_failure_policy not in ("reject", "synthetic", "raise"):
+            raise ValueError(
+                "signal_failure_policy must be one of: reject, synthetic, raise"
             )

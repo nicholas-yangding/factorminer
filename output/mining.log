@@ -613,3 +613,609 @@
 2026-03-14 10:10:41,200 INFO ============================================================
 2026-03-14 10:10:41,200 INFO Session log exported to output/session_log.json
 2026-03-14 10:10:41,201 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:25:48,664 INFO ============================================================
+2026-03-18 13:25:48,665 INFO FactorMiner session started
+2026-03-18 13:25:48,665 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 13:25:48,665 INFO ============================================================
+2026-03-18 13:25:48,666 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:25:48,666 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:25:48,678 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:25:48,679 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:25:48,775 INFO Admitted factor 1 'momentum_reversal' (IC=0.2798, max_corr=0.0000, category=Momentum)
+2026-03-18 13:25:48,780 INFO Admitted factor 2 'volume_surprise' (IC=0.2755, max_corr=0.0000, category=Volatility)
+2026-03-18 13:25:48,791 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:25:48,810 INFO Admitted factor 4 'vwap_deviation' (IC=0.3060, max_corr=0.0000, category=VWAP)
+2026-03-18 13:25:48,837 INFO Admitted factor 5 'return_skew' (IC=0.2640, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:25:48,848 INFO Iter   1 | gen=5 ic_ok=5 corr_ok=5 +5 -0 | lib=5 yield=100.0% best_ic=0.3060 mean_ic=0.2748 (0.2s)
+2026-03-18 13:25:48,849 INFO Iteration 1: Library size=5, Admitted=5, Yield=100.0%, AvgCorr=0.271
+2026-03-18 13:25:48,851 INFO Saved library metadata to output/checkpoint/library.json (5 factors)
+2026-03-18 13:25:48,857 INFO Saved signal cache to output/checkpoint/library_signals.npz (5 arrays)
+2026-03-18 13:25:48,860 INFO Session saved to output/checkpoint
+2026-03-18 13:25:48,862 INFO ============================================================
+2026-03-18 13:25:48,862 INFO Session complete
+2026-03-18 13:25:48,862 INFO Library: 5 factors | 1 iterations | 0s total
+2026-03-18 13:25:48,862 INFO Candidates: 5 generated, 5 admitted (100.0% yield)
+2026-03-18 13:25:48,863 INFO ============================================================
+2026-03-18 13:25:48,864 INFO Session log exported to output/session_log.json
+2026-03-18 13:25:48,866 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:25:48,893 INFO Admitted factor 1 'f1' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,898 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,914 INFO Admitted factor 2 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,918 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,933 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,942 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,944 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,945 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,953 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,962 INFO Admitted factor 1 'old_factor' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,962 INFO Replaced factor 1 with 2 'new_factor' (IC=0.1500)
+2026-03-18 13:25:48,963 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,964 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,972 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,984 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,985 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:48,991 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,004 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,021 INFO Admitted factor 4 'f3' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,022 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,028 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,039 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,067 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,073 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,084 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:25:49,085 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,091 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,101 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:25:49,102 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,108 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,118 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:25:49,119 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,124 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,135 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:25:49,136 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,142 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,153 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:25:49,154 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,161 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,173 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:25:49,174 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,181 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,193 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:25:49,194 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:25:49,201 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:25:49,213 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:33:55,815 INFO ============================================================
+2026-03-18 13:33:55,838 INFO FactorMiner session started
+2026-03-18 13:33:55,838 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 13:33:55,839 INFO ============================================================
+2026-03-18 13:33:55,841 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:33:55,841 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:33:55,846 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:33:56,008 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:33:58,200 INFO Admitted factor 1 'momentum_reversal' (IC=0.2971, max_corr=0.0000, category=Momentum)
+2026-03-18 13:33:58,252 INFO Admitted factor 2 'volume_surprise' (IC=0.2801, max_corr=0.0000, category=Volatility)
+2026-03-18 13:33:58,518 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:33:58,797 INFO Admitted factor 4 'vwap_deviation' (IC=0.2516, max_corr=0.0000, category=VWAP)
+2026-03-18 13:33:58,961 INFO Admitted factor 5 'return_skew' (IC=0.2492, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:33:58,967 INFO Iter   1 | gen=5 ic_ok=5 corr_ok=5 +5 -0 | lib=5 yield=100.0% best_ic=0.2971 mean_ic=0.2653 (3.1s)
+2026-03-18 13:33:58,968 INFO Iteration 1: Library size=5, Admitted=5, Yield=100.0%, AvgCorr=0.275
+2026-03-18 13:33:58,970 INFO Saved library metadata to output/checkpoint/library.json (5 factors)
+2026-03-18 13:33:58,986 INFO Saved signal cache to output/checkpoint/library_signals.npz (5 arrays)
+2026-03-18 13:33:58,995 INFO Session saved to output/checkpoint
+2026-03-18 13:33:58,996 INFO ============================================================
+2026-03-18 13:33:58,997 INFO Session complete
+2026-03-18 13:33:58,997 INFO Library: 5 factors | 1 iterations | 3s total
+2026-03-18 13:33:58,997 INFO Candidates: 5 generated, 5 admitted (100.0% yield)
+2026-03-18 13:33:58,997 INFO ============================================================
+2026-03-18 13:33:58,998 INFO Session log exported to output/session_log.json
+2026-03-18 13:33:59,000 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:33:59,037 INFO Debate batch #1: 3 specialists, critic=False, per_specialist=5
+2026-03-18 13:33:59,038 INFO Running specialist: momentum
+2026-03-18 13:33:59,039 INFO Generating batch #1: size=5, provider=mock
+2026-03-18 13:33:59,041 INFO LLM response received in 0.0s (296 chars)
+2026-03-18 13:33:59,042 INFO Batch #1 initial parse: 5 valid, 0 invalid, 0 unparseable lines
+2026-03-18 13:33:59,042 INFO Batch #1 categories: cross_sectional=1, cross_sectional_momentum=1, cross_sectional_volatility=1, general=1, volatility=1
+2026-03-18 13:33:59,044 INFO Specialist momentum produced 5 valid candidates
+2026-03-18 13:33:59,045 INFO Running specialist: volatility
+2026-03-18 13:33:59,045 INFO Generating batch #1: size=5, provider=mock
+2026-03-18 13:33:59,045 INFO LLM response received in 0.0s (295 chars)
+2026-03-18 13:33:59,046 INFO Batch #1 initial parse: 5 valid, 0 invalid, 0 unparseable lines
+2026-03-18 13:33:59,046 INFO Batch #1 categories: cross_sectional=2, cross_sectional_momentum=1, cross_sectional_smoothing=1, regression=1
+2026-03-18 13:33:59,046 INFO Specialist volatility produced 5 valid candidates
+2026-03-18 13:33:59,046 INFO Running specialist: liquidity
+2026-03-18 13:33:59,046 INFO Generating batch #1: size=5, provider=mock
+2026-03-18 13:33:59,046 INFO LLM response received in 0.0s (376 chars)
+2026-03-18 13:33:59,048 INFO Batch #1 initial parse: 5 valid, 0 invalid, 0 unparseable lines
+2026-03-18 13:33:59,048 INFO Batch #1 categories: cross_sectional=1, cross_sectional_regression=1, cross_sectional_smoothing=1, cross_sectional_trend=1, volatility=1
+2026-03-18 13:33:59,048 INFO Specialist liquidity produced 5 valid candidates
+2026-03-18 13:33:59,048 INFO Debate batch #1 complete: returning 10 candidates
+2026-03-18 13:33:59,051 INFO Debate batch #1: 3 specialists, critic=True, per_specialist=5
+2026-03-18 13:33:59,052 INFO Running specialist: momentum
+2026-03-18 13:33:59,052 INFO Generating batch #1: size=5, provider=mock
+2026-03-18 13:33:59,052 INFO LLM response received in 0.0s (296 chars)
+2026-03-18 13:33:59,053 INFO Batch #1 initial parse: 5 valid, 0 invalid, 0 unparseable lines
+2026-03-18 13:33:59,053 INFO Batch #1 categories: cross_sectional=1, cross_sectional_momentum=1, cross_sectional_volatility=1, general=1, volatility=1
+2026-03-18 13:33:59,053 INFO Specialist momentum produced 5 valid candidates
+2026-03-18 13:33:59,054 INFO Running specialist: volatility
+2026-03-18 13:33:59,054 INFO Generating batch #1: size=5, provider=mock
+2026-03-18 13:33:59,054 INFO LLM response received in 0.0s (295 chars)
+2026-03-18 13:33:59,055 INFO Batch #1 initial parse: 5 valid, 0 invalid, 0 unparseable lines
+2026-03-18 13:33:59,055 INFO Batch #1 categories: cross_sectional=2, cross_sectional_momentum=1, cross_sectional_smoothing=1, regression=1
+2026-03-18 13:33:59,056 INFO Specialist volatility produced 5 valid candidates
+2026-03-18 13:33:59,056 INFO Running specialist: liquidity
+2026-03-18 13:33:59,056 INFO Generating batch #1: size=5, provider=mock
+2026-03-18 13:33:59,056 INFO LLM response received in 0.0s (376 chars)
+2026-03-18 13:33:59,058 INFO Batch #1 initial parse: 5 valid, 0 invalid, 0 unparseable lines
+2026-03-18 13:33:59,058 INFO Batch #1 categories: cross_sectional=1, cross_sectional_regression=1, cross_sectional_smoothing=1, cross_sectional_trend=1, volatility=1
+2026-03-18 13:33:59,059 INFO Specialist liquidity produced 5 valid candidates
+2026-03-18 13:33:59,059 INFO Running critic on 15 total candidates (top_k=10)
+2026-03-18 13:33:59,073 INFO Debate batch #1 complete: returning 10 candidates
+2026-03-18 13:35:21,318 INFO ============================================================
+2026-03-18 13:35:21,319 INFO FactorMiner session started
+2026-03-18 13:35:21,322 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 13:35:21,322 INFO ============================================================
+2026-03-18 13:35:21,494 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:35:21,568 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:35:21,817 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:35:21,824 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:35:22,441 INFO Admitted factor 1 'momentum_reversal' (IC=0.2556, max_corr=0.0000, category=Momentum)
+2026-03-18 13:35:22,492 INFO Admitted factor 2 'volume_surprise' (IC=0.2657, max_corr=0.0000, category=Volatility)
+2026-03-18 13:35:22,592 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:35:22,828 INFO Admitted factor 4 'vwap_deviation' (IC=0.2721, max_corr=0.0000, category=VWAP)
+2026-03-18 13:35:23,033 INFO Admitted factor 5 'return_skew' (IC=0.3375, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:35:23,054 INFO Iter   1 | gen=5 ic_ok=5 corr_ok=5 +5 -0 | lib=5 yield=100.0% best_ic=0.3375 mean_ic=0.2759 (1.6s)
+2026-03-18 13:35:23,060 INFO Iteration 1: Library size=5, Admitted=5, Yield=100.0%, AvgCorr=0.287
+2026-03-18 13:35:23,062 INFO Saved library metadata to output/checkpoint/library.json (5 factors)
+2026-03-18 13:35:23,079 INFO Saved signal cache to output/checkpoint/library_signals.npz (5 arrays)
+2026-03-18 13:35:23,085 INFO Session saved to output/checkpoint
+2026-03-18 13:35:23,087 INFO ============================================================
+2026-03-18 13:35:23,087 INFO Session complete
+2026-03-18 13:35:23,088 INFO Library: 5 factors | 1 iterations | 2s total
+2026-03-18 13:35:23,088 INFO Candidates: 5 generated, 5 admitted (100.0% yield)
+2026-03-18 13:35:23,088 INFO ============================================================
+2026-03-18 13:35:23,089 INFO Session log exported to output/session_log.json
+2026-03-18 13:35:23,101 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:36:51,729 INFO ============================================================
+2026-03-18 13:36:51,729 INFO FactorMiner session started
+2026-03-18 13:36:51,729 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 13:36:51,729 INFO ============================================================
+2026-03-18 13:36:51,730 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:36:51,776 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:36:51,788 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:36:51,791 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:36:52,371 INFO Admitted factor 1 'momentum_reversal' (IC=0.2758, max_corr=0.0000, category=Momentum)
+2026-03-18 13:36:52,386 INFO Admitted factor 2 'volume_surprise' (IC=0.3207, max_corr=0.0000, category=Volatility)
+2026-03-18 13:36:52,412 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:36:52,470 INFO Admitted factor 4 'vwap_deviation' (IC=0.2779, max_corr=0.0000, category=VWAP)
+2026-03-18 13:36:52,588 INFO Admitted factor 5 'return_skew' (IC=0.2622, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:36:52,595 INFO Iter   1 | gen=5 ic_ok=5 corr_ok=5 +5 -0 | lib=5 yield=100.0% best_ic=0.3207 mean_ic=0.2770 (0.9s)
+2026-03-18 13:36:52,599 INFO Iteration 1: Library size=5, Admitted=5, Yield=100.0%, AvgCorr=0.268
+2026-03-18 13:36:52,603 INFO Saved library metadata to output/checkpoint/library.json (5 factors)
+2026-03-18 13:36:52,608 INFO Saved signal cache to output/checkpoint/library_signals.npz (5 arrays)
+2026-03-18 13:36:52,611 INFO Session saved to output/checkpoint
+2026-03-18 13:36:52,612 INFO ============================================================
+2026-03-18 13:36:52,612 INFO Session complete
+2026-03-18 13:36:52,613 INFO Library: 5 factors | 1 iterations | 1s total
+2026-03-18 13:36:52,613 INFO Candidates: 5 generated, 5 admitted (100.0% yield)
+2026-03-18 13:36:52,613 INFO ============================================================
+2026-03-18 13:36:52,614 INFO Session log exported to output/session_log.json
+2026-03-18 13:36:52,617 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:36:52,658 INFO Admitted factor 1 'f1' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,664 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,686 INFO Admitted factor 2 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,714 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,764 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,811 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,814 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,817 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,845 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,881 INFO Admitted factor 1 'old_factor' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,881 INFO Replaced factor 1 with 2 'new_factor' (IC=0.1500)
+2026-03-18 13:36:52,887 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,892 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,923 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,983 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:52,987 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,021 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,109 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,226 INFO Admitted factor 4 'f3' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,230 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,267 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,375 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,583 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,628 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:53,705 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:36:53,709 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,823 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:53,862 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:36:53,864 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,879 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:53,905 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:36:53,908 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:53,923 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:53,970 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:36:53,974 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:54,002 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:54,106 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:36:54,109 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:54,147 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:54,249 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:36:54,255 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:54,298 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:54,377 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:36:54,386 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-18 13:36:54,418 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-18 13:36:54,496 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-18 13:40:29,193 INFO ============================================================
+2026-03-18 13:40:29,193 INFO FactorMiner session started
+2026-03-18 13:40:29,193 INFO Target library: 1 | Batch: 1 | Max iters: 1
+2026-03-18 13:40:29,193 INFO ============================================================
+2026-03-18 13:40:29,653 INFO Admitted factor 1 'momentum_reversal' (IC=0.1187, max_corr=0.0000, category=Momentum)
+2026-03-18 13:40:29,657 INFO Iter   1 | gen=1 ic_ok=1 corr_ok=1 +1 -0 | lib=1 yield=100.0% best_ic=0.1187 mean_ic=0.1187 (0.4s)
+2026-03-18 13:40:29,658 INFO Iteration 1: Library size=1, Admitted=1, Yield=100.0%, AvgCorr=0.000
+2026-03-18 13:40:29,660 INFO Saved library metadata to output/checkpoint/library.json (1 factors)
+2026-03-18 13:40:29,695 INFO Saved signal cache to output/checkpoint/library_signals.npz (1 arrays)
+2026-03-18 13:40:29,704 INFO Session saved to output/checkpoint
+2026-03-18 13:40:29,706 INFO ============================================================
+2026-03-18 13:40:29,706 INFO Session complete
+2026-03-18 13:40:29,706 INFO Library: 1 factors | 1 iterations | 0s total
+2026-03-18 13:40:29,707 INFO Candidates: 1 generated, 1 admitted (100.0% yield)
+2026-03-18 13:40:29,707 INFO ============================================================
+2026-03-18 13:40:29,709 INFO Session log exported to output/session_log.json
+2026-03-18 13:40:29,718 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:40:29,720 INFO Saved library metadata to output/factor_library.json (1 factors)
+2026-03-18 13:40:29,743 INFO Saved signal cache to output/factor_library_signals.npz (1 arrays)
+2026-03-18 13:40:34,399 INFO ============================================================
+2026-03-18 13:40:34,399 INFO FactorMiner session started
+2026-03-18 13:40:34,400 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 13:40:34,400 INFO ============================================================
+2026-03-18 13:40:34,434 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:34,435 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:34,475 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:34,530 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:34,903 INFO Admitted factor 1 'momentum_reversal' (IC=0.2766, max_corr=0.0000, category=Momentum)
+2026-03-18 13:40:34,931 INFO Admitted factor 2 'volume_surprise' (IC=0.3010, max_corr=0.0000, category=Volatility)
+2026-03-18 13:40:34,997 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:40:35,078 INFO Admitted factor 4 'vwap_deviation' (IC=0.2381, max_corr=0.0000, category=VWAP)
+2026-03-18 13:40:35,172 INFO Admitted factor 5 'return_skew' (IC=0.2104, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:40:35,175 INFO Iter   1 | gen=5 ic_ok=5 corr_ok=5 +5 -0 | lib=5 yield=100.0% best_ic=0.3010 mean_ic=0.2549 (0.7s)
+2026-03-18 13:40:35,176 INFO Iteration 1: Library size=5, Admitted=5, Yield=100.0%, AvgCorr=0.286
+2026-03-18 13:40:35,178 INFO Saved library metadata to output/checkpoint/library.json (5 factors)
+2026-03-18 13:40:35,180 INFO Saved signal cache to output/checkpoint/library_signals.npz (5 arrays)
+2026-03-18 13:40:35,183 INFO Session saved to output/checkpoint
+2026-03-18 13:40:35,184 INFO ============================================================
+2026-03-18 13:40:35,184 INFO Session complete
+2026-03-18 13:40:35,185 INFO Library: 5 factors | 1 iterations | 1s total
+2026-03-18 13:40:35,185 INFO Candidates: 5 generated, 5 admitted (100.0% yield)
+2026-03-18 13:40:35,185 INFO ============================================================
+2026-03-18 13:40:35,185 INFO Session log exported to output/session_log.json
+2026-03-18 13:40:35,188 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:40:35,193 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:35,229 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:35,244 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:35,300 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:40:35,568 INFO Admitted factor 1 'momentum_reversal' (IC=0.2766, max_corr=0.0000, category=Momentum)
+2026-03-18 13:40:35,583 INFO Admitted factor 2 'volume_surprise' (IC=0.3010, max_corr=0.0000, category=Volatility)
+2026-03-18 13:40:35,616 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:40:35,666 INFO Admitted factor 4 'vwap_deviation' (IC=0.2381, max_corr=0.0000, category=VWAP)
+2026-03-18 13:40:35,742 INFO Admitted factor 5 'return_skew' (IC=0.2104, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:40:35,846 INFO Removed factor 1 'momentum_reversal' from library
+2026-03-18 13:40:35,852 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-18 13:40:35,873 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-18 13:40:35,873 INFO Removed factor 1 'factor_a' from library
+2026-03-18 13:40:35,932 INFO Generating mock data: 50 assets x 500 periods @ 1d
+2026-03-18 13:40:36,129 INFO Generated 25000 rows: 50 assets x 500 periods, planted alpha in 10 assets
+2026-03-18 13:42:58,666 INFO ============================================================
+2026-03-18 13:42:58,666 INFO FactorMiner session started
+2026-03-18 13:42:58,666 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 13:42:58,666 INFO ============================================================
+2026-03-18 13:42:58,667 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:58,668 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:58,708 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:58,744 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:59,006 INFO Admitted factor 1 'momentum_reversal' (IC=0.2446, max_corr=0.0000, category=Momentum)
+2026-03-18 13:42:59,023 INFO Admitted factor 2 'volume_surprise' (IC=0.2446, max_corr=0.0000, category=Volatility)
+2026-03-18 13:42:59,057 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:42:59,118 INFO Admitted factor 4 'vwap_deviation' (IC=0.2141, max_corr=0.0000, category=VWAP)
+2026-03-18 13:42:59,203 INFO Admitted factor 5 'return_skew' (IC=0.2847, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:42:59,206 INFO Iter   1 | gen=5 ic_ok=5 corr_ok=5 +5 -0 | lib=5 yield=100.0% best_ic=0.2847 mean_ic=0.2473 (0.5s)
+2026-03-18 13:42:59,206 INFO Iteration 1: Library size=5, Admitted=5, Yield=100.0%, AvgCorr=0.280
+2026-03-18 13:42:59,207 INFO Saved library metadata to output/checkpoint/library.json (5 factors)
+2026-03-18 13:42:59,211 INFO Saved signal cache to output/checkpoint/library_signals.npz (5 arrays)
+2026-03-18 13:42:59,214 INFO Session saved to output/checkpoint
+2026-03-18 13:42:59,215 INFO ============================================================
+2026-03-18 13:42:59,216 INFO Session complete
+2026-03-18 13:42:59,216 INFO Library: 5 factors | 1 iterations | 1s total
+2026-03-18 13:42:59,216 INFO Candidates: 5 generated, 5 admitted (100.0% yield)
+2026-03-18 13:42:59,216 INFO ============================================================
+2026-03-18 13:42:59,217 INFO Session log exported to output/session_log.json
+2026-03-18 13:42:59,220 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:42:59,224 WARNING Expression evaluation failed for 'Neg(CsRank(Delta($close, 5)))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:59,266 WARNING Expression evaluation failed for 'CsZScore(Div(Sub($volume, Mean($volume, 20)), Std($volume, 20)))': "Feature '$volume' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:59,280 WARNING Expression evaluation failed for 'CsRank(Div(Sub($close, $vwap), $vwap))': "Feature '$close' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:59,281 WARNING Expression evaluation failed for 'Neg(Skew($returns, 20))': "Feature '$returns' not found in data. Available: ['$high', '$low', '$open']"  — falling back to pseudo-signals
+2026-03-18 13:42:59,643 INFO Admitted factor 1 'momentum_reversal' (IC=0.2446, max_corr=0.0000, category=Momentum)
+2026-03-18 13:42:59,661 INFO Admitted factor 2 'volume_surprise' (IC=0.2446, max_corr=0.0000, category=Volatility)
+2026-03-18 13:42:59,696 INFO Admitted factor 3 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 13:42:59,740 INFO Admitted factor 4 'vwap_deviation' (IC=0.2141, max_corr=0.0000, category=VWAP)
+2026-03-18 13:42:59,792 INFO Admitted factor 5 'return_skew' (IC=0.2847, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:42:59,861 INFO Removed factor 1 'momentum_reversal' from library
+2026-03-18 13:42:59,865 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-18 13:42:59,877 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-18 13:42:59,877 INFO Removed factor 1 'factor_a' from library
+2026-03-18 13:42:59,880 INFO Generating mock data: 10 assets x 100 periods @ 1d
+2026-03-18 13:42:59,895 INFO Generated 1000 rows: 10 assets x 100 periods, planted alpha in 2 assets
+2026-03-18 13:42:59,897 INFO Generating mock data: 10 assets x 100 periods @ 1d
+2026-03-18 13:42:59,912 INFO Generated 1000 rows: 10 assets x 100 periods, planted alpha in 2 assets
+2026-03-18 13:42:59,914 INFO Generating mock data: 10 assets x 100 periods @ 1d
+2026-03-18 13:42:59,926 INFO Generated 1000 rows: 10 assets x 100 periods, planted alpha in 2 assets
+2026-03-18 13:42:59,928 INFO Generating mock data: 10 assets x 100 periods @ 1d
+2026-03-18 13:42:59,941 INFO Generated 1000 rows: 10 assets x 100 periods, planted alpha in 2 assets
+2026-03-18 13:42:59,945 INFO Generating mock data: 10 assets x 100 periods @ 1d
+2026-03-18 13:42:59,960 INFO Generated 1000 rows: 10 assets x 100 periods, planted alpha in 2 assets
+2026-03-18 13:42:59,963 INFO Generating mock data: 20 assets x 200 periods @ 10min
+2026-03-18 13:43:00,000 INFO Generated 4000 rows: 20 assets x 200 periods, planted alpha in 4 assets
+2026-03-18 13:43:00,003 INFO Generating mock data: 20 assets x 200 periods @ 10min
+2026-03-18 13:43:00,039 INFO Generated 4000 rows: 20 assets x 200 periods, planted alpha in 4 assets
+2026-03-18 13:43:00,041 INFO Generating mock data: 20 assets x 200 periods @ 10min
+2026-03-18 13:43:00,075 INFO Generated 4000 rows: 20 assets x 200 periods, planted alpha in 4 assets
+2026-03-18 13:43:00,080 INFO Generating mock data: 20 assets x 200 periods @ 10min
+2026-03-18 13:43:00,111 INFO Generated 4000 rows: 20 assets x 200 periods, planted alpha in 4 assets
+2026-03-18 13:43:00,115 INFO Generating mock data: 20 assets x 200 periods @ 10min
+2026-03-18 13:43:00,148 INFO Generated 4000 rows: 20 assets x 200 periods, planted alpha in 4 assets
+2026-03-18 13:43:00,151 INFO Generating mock data: 20 assets x 200 periods @ 10min
+2026-03-18 13:43:00,182 INFO Generated 4000 rows: 20 assets x 200 periods, planted alpha in 4 assets
+2026-03-18 13:43:00,185 INFO Generating mock data: 10 assets x 100 periods @ 10min
+2026-03-18 13:43:00,200 INFO Generated 1000 rows: 10 assets x 100 periods, planted alpha in 2 assets
+2026-03-18 13:43:00,205 INFO Injected 50 halt bars (5.00%)
+2026-03-18 13:43:00,207 INFO Generating mock data: 10 assets x 100 periods @ 10min
+2026-03-18 13:43:00,226 INFO Generated 1000 rows: 10 assets x 100 periods, planted alpha in 2 assets
+2026-03-18 13:43:00,233 INFO Injected 50 halt bars (5.00%)
+2026-03-18 13:43:00,238 INFO Generating mock data: 5 assets x 50 periods @ 10min
+2026-03-18 13:43:00,249 INFO Generated 250 rows: 5 assets x 50 periods, planted alpha in 1 assets
+2026-03-18 13:43:00,252 INFO Generating mock data: 5 assets x 50 periods @ 30min
+2026-03-18 13:43:00,259 INFO Generated 250 rows: 5 assets x 50 periods, planted alpha in 1 assets
+2026-03-18 13:43:00,262 INFO Generating mock data: 5 assets x 50 periods @ 1h
+2026-03-18 13:43:00,273 INFO Generated 250 rows: 5 assets x 50 periods, planted alpha in 1 assets
+2026-03-18 13:43:00,275 INFO Generating mock data: 5 assets x 50 periods @ 1d
+2026-03-18 13:43:00,282 INFO Generated 250 rows: 5 assets x 50 periods, planted alpha in 1 assets
+2026-03-18 13:43:00,286 INFO Generating mock data: 5 assets x 20 periods @ 10min
+2026-03-18 13:43:00,293 INFO Generated 100 rows: 5 assets x 20 periods, planted alpha in 1 assets
+2026-03-18 13:43:00,296 INFO Generating mock data: 5 assets x 20 periods @ 10min
+2026-03-18 13:43:00,302 INFO Generated 100 rows: 5 assets x 20 periods, planted alpha in 0 assets
+2026-03-18 13:43:00,306 INFO Generating mock data: 5 assets x 50 periods @ 10min
+2026-03-18 13:43:00,312 INFO Generated 250 rows: 5 assets x 50 periods, planted alpha in 1 assets
+2026-03-18 13:43:00,315 INFO Generating mock data: 5 assets x 50 periods @ 10min
+2026-03-18 13:43:00,325 INFO Generated 250 rows: 5 assets x 50 periods, planted alpha in 1 assets
+2026-03-18 13:46:08,111 INFO ============================================================
+2026-03-18 13:46:08,112 INFO FactorMiner session started
+2026-03-18 13:46:08,112 INFO Target library: 20 | Batch: 10 | Max iters: 3
+2026-03-18 13:46:08,112 INFO ============================================================
+2026-03-18 13:46:11,492 INFO Admitted factor 1 'momentum_reversal' (IC=0.0793, max_corr=0.0000, category=Momentum)
+2026-03-18 13:46:11,533 INFO Admitted factor 2 'price_range_ratio' (IC=0.0992, max_corr=0.0000, category=Other)
+2026-03-18 13:46:11,618 INFO Admitted factor 3 'vwap_deviation' (IC=0.0975, max_corr=0.0000, category=VWAP)
+2026-03-18 13:46:11,746 INFO Admitted factor 4 'return_skew' (IC=0.0796, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:46:11,924 INFO Admitted factor 5 'intraday_momentum' (IC=0.0775, max_corr=0.0000, category=Cross-Sectional)
+2026-03-18 13:46:12,148 INFO Admitted factor 6 'volume_price_corr' (IC=0.0793, max_corr=0.0000, category=PV-Correlation)
+2026-03-18 13:46:12,408 INFO Admitted factor 7 'amt_acceleration' (IC=0.0830, max_corr=0.0000, category=Amount)
+2026-03-18 13:46:12,703 INFO Admitted factor 8 'close_high_ratio' (IC=0.0810, max_corr=0.0000, category=Extrema)
+2026-03-18 13:46:12,706 INFO Iter   1 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=8 yield=80.0% best_ic=0.0992 mean_ic=0.0831 (4.6s)
+2026-03-18 13:46:12,706 INFO Iteration 1: Library size=8, Admitted=8, Yield=80.0%, AvgCorr=0.102
+2026-03-18 13:46:12,707 INFO Saved library metadata to output/checkpoint/library.json (8 factors)
+2026-03-18 13:46:12,809 INFO Saved signal cache to output/checkpoint/library_signals.npz (8 arrays)
+2026-03-18 13:46:12,811 INFO Session saved to output/checkpoint
+2026-03-18 13:46:19,640 INFO ============================================================
+2026-03-18 13:46:19,641 INFO FactorMiner session started
+2026-03-18 13:46:19,641 INFO Target library: 20 | Batch: 10 | Max iters: 3
+2026-03-18 13:46:19,641 INFO ============================================================
+2026-03-18 13:46:21,019 INFO ============================================================
+2026-03-18 13:46:21,019 INFO FactorMiner session started
+2026-03-18 13:46:21,019 INFO Target library: 20 | Batch: 10 | Max iters: 3
+2026-03-18 13:46:21,019 INFO ============================================================
+2026-03-18 13:46:23,514 INFO Admitted factor 1 'momentum_reversal' (IC=0.0793, max_corr=0.0000, category=Momentum)
+2026-03-18 13:46:23,564 INFO Admitted factor 2 'price_range_ratio' (IC=0.0992, max_corr=0.0000, category=Other)
+2026-03-18 13:46:23,604 INFO Admitted factor 9 'volatility_ratio' (IC=0.0786, max_corr=0.0892, category=Volatility)
+2026-03-18 13:46:23,670 INFO Admitted factor 3 'vwap_deviation' (IC=0.0975, max_corr=0.0000, category=VWAP)
+2026-03-18 13:46:23,850 INFO Admitted factor 4 'return_skew' (IC=0.0796, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:46:24,058 INFO Admitted factor 5 'intraday_momentum' (IC=0.0775, max_corr=0.0000, category=Cross-Sectional)
+2026-03-18 13:46:24,099 INFO Admitted factor 10 'mean_reversion' (IC=0.0925, max_corr=0.4419, category=Smoothing)
+2026-03-18 13:46:24,355 INFO Admitted factor 6 'volume_price_corr' (IC=0.0793, max_corr=0.0000, category=PV-Correlation)
+2026-03-18 13:46:24,639 INFO Admitted factor 11 'volume_trend' (IC=0.0801, max_corr=0.3558, category=Regression)
+2026-03-18 13:46:24,654 INFO Admitted factor 7 'amt_acceleration' (IC=0.0830, max_corr=0.0000, category=Amount)
+2026-03-18 13:46:25,005 INFO Admitted factor 8 'close_high_ratio' (IC=0.0810, max_corr=0.0000, category=Extrema)
+2026-03-18 13:46:25,008 INFO Iter   1 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=8 yield=80.0% best_ic=0.0992 mean_ic=0.0831 (5.4s)
+2026-03-18 13:46:25,008 INFO Iteration 1: Library size=8, Admitted=8, Yield=80.0%, AvgCorr=0.102
+2026-03-18 13:46:25,009 INFO Saved library metadata to output/checkpoint/library.json (8 factors)
+2026-03-18 13:46:25,125 INFO Saved signal cache to output/checkpoint/library_signals.npz (8 arrays)
+2026-03-18 13:46:25,126 INFO Session saved to output/checkpoint
+2026-03-18 13:46:25,175 INFO Admitted factor 1 'momentum_reversal' (IC=0.0793, max_corr=0.0000, category=Momentum)
+2026-03-18 13:46:25,180 INFO Admitted factor 12 'amt_volume_div' (IC=0.0830, max_corr=0.1019, category=PV-Correlation)
+2026-03-18 13:46:25,226 INFO Admitted factor 2 'price_range_ratio' (IC=0.0992, max_corr=0.0000, category=Other)
+2026-03-18 13:46:25,327 INFO Admitted factor 3 'vwap_deviation' (IC=0.0975, max_corr=0.0000, category=VWAP)
+2026-03-18 13:46:25,478 INFO Admitted factor 4 'return_skew' (IC=0.0796, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:46:25,686 INFO Admitted factor 5 'intraday_momentum' (IC=0.0775, max_corr=0.0000, category=Cross-Sectional)
+2026-03-18 13:46:25,801 INFO Admitted factor 13 'high_low_decay' (IC=0.0950, max_corr=0.4924, category=Other)
+2026-03-18 13:46:25,944 INFO Admitted factor 6 'volume_price_corr' (IC=0.0793, max_corr=0.0000, category=PV-Correlation)
+2026-03-18 13:46:26,238 INFO Admitted factor 7 'amt_acceleration' (IC=0.0830, max_corr=0.0000, category=Amount)
+2026-03-18 13:46:26,428 INFO Admitted factor 14 'residual_vol' (IC=0.0769, max_corr=0.2395, category=Regression)
+2026-03-18 13:46:26,554 INFO Admitted factor 8 'close_high_ratio' (IC=0.0810, max_corr=0.0000, category=Extrema)
+2026-03-18 13:46:26,555 INFO Iter   1 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=8 yield=80.0% best_ic=0.0992 mean_ic=0.0831 (5.5s)
+2026-03-18 13:46:26,555 INFO Iteration 1: Library size=8, Admitted=8, Yield=80.0%, AvgCorr=0.102
+2026-03-18 13:46:26,556 INFO Saved library metadata to output/checkpoint/library.json (8 factors)
+2026-03-18 13:46:26,664 INFO Saved signal cache to output/checkpoint/library_signals.npz (8 arrays)
+2026-03-18 13:46:26,665 INFO Session saved to output/checkpoint
+2026-03-18 13:46:27,071 INFO Admitted factor 15 'open_gap' (IC=0.0970, max_corr=0.1400, category=Momentum)
+2026-03-18 13:46:27,733 INFO Admitted factor 16 'log_turnover' (IC=0.0687, max_corr=0.0820, category=Amount)
+2026-03-18 13:46:27,734 INFO Iter   2 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=16 yield=80.0% best_ic=0.0970 mean_ic=0.0831 (14.9s)
+2026-03-18 13:46:27,734 INFO Iteration 2: Library size=16, Admitted=8, Yield=80.0%, AvgCorr=0.101
+2026-03-18 13:46:27,735 INFO Saved library metadata to output/checkpoint/library.json (16 factors)
+2026-03-18 13:46:27,931 INFO Saved signal cache to output/checkpoint/library_signals.npz (16 arrays)
+2026-03-18 13:46:27,932 INFO Session saved to output/checkpoint
+2026-03-18 13:46:35,997 INFO Admitted factor 9 'volatility_ratio' (IC=0.0786, max_corr=0.0892, category=Volatility)
+2026-03-18 13:46:36,400 INFO Admitted factor 10 'mean_reversion' (IC=0.0925, max_corr=0.4419, category=Smoothing)
+2026-03-18 13:46:36,821 INFO Admitted factor 11 'volume_trend' (IC=0.0801, max_corr=0.3558, category=Regression)
+2026-03-18 13:46:37,286 INFO Admitted factor 9 'volatility_ratio' (IC=0.0786, max_corr=0.0892, category=Volatility)
+2026-03-18 13:46:37,295 INFO Admitted factor 12 'amt_volume_div' (IC=0.0830, max_corr=0.1019, category=PV-Correlation)
+2026-03-18 13:46:37,675 INFO Admitted factor 10 'mean_reversion' (IC=0.0925, max_corr=0.4419, category=Smoothing)
+2026-03-18 13:46:37,818 INFO Admitted factor 13 'high_low_decay' (IC=0.0950, max_corr=0.4924, category=Other)
+2026-03-18 13:46:38,134 INFO Admitted factor 11 'volume_trend' (IC=0.0801, max_corr=0.3558, category=Regression)
+2026-03-18 13:46:38,437 INFO Admitted factor 14 'residual_vol' (IC=0.0769, max_corr=0.2395, category=Regression)
+2026-03-18 13:46:38,636 INFO Admitted factor 12 'amt_volume_div' (IC=0.0830, max_corr=0.1019, category=PV-Correlation)
+2026-03-18 13:46:39,060 INFO Admitted factor 15 'open_gap' (IC=0.0970, max_corr=0.1400, category=Momentum)
+2026-03-18 13:46:39,153 INFO Admitted factor 13 'high_low_decay' (IC=0.0950, max_corr=0.4924, category=Other)
+2026-03-18 13:46:39,692 INFO Admitted factor 14 'residual_vol' (IC=0.0769, max_corr=0.2395, category=Regression)
+2026-03-18 13:46:39,705 INFO Admitted factor 16 'log_turnover' (IC=0.0687, max_corr=0.0820, category=Amount)
+2026-03-18 13:46:39,707 INFO Iter   2 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=16 yield=80.0% best_ic=0.0970 mean_ic=0.0831 (14.6s)
+2026-03-18 13:46:39,707 INFO Iteration 2: Library size=16, Admitted=8, Yield=80.0%, AvgCorr=0.101
+2026-03-18 13:46:39,708 INFO Saved library metadata to output/checkpoint/library.json (16 factors)
+2026-03-18 13:46:39,922 INFO Saved signal cache to output/checkpoint/library_signals.npz (16 arrays)
+2026-03-18 13:46:39,924 INFO Session saved to output/checkpoint
+2026-03-18 13:46:40,299 INFO Admitted factor 15 'open_gap' (IC=0.0970, max_corr=0.1400, category=Momentum)
+2026-03-18 13:46:40,971 INFO Admitted factor 16 'log_turnover' (IC=0.0687, max_corr=0.0820, category=Amount)
+2026-03-18 13:46:40,973 INFO Iter   2 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=16 yield=80.0% best_ic=0.0970 mean_ic=0.0831 (14.3s)
+2026-03-18 13:46:40,973 INFO Iteration 2: Library size=16, Admitted=8, Yield=80.0%, AvgCorr=0.101
+2026-03-18 13:46:40,974 INFO Saved library metadata to output/checkpoint/library.json (16 factors)
+2026-03-18 13:46:41,184 INFO Saved signal cache to output/checkpoint/library_signals.npz (16 arrays)
+2026-03-18 13:46:41,185 INFO Session saved to output/checkpoint
+2026-03-18 13:46:48,829 INFO Admitted factor 17 'beta_momentum' (IC=0.0826, max_corr=0.2471, category=PV-Correlation)
+2026-03-18 13:46:49,667 INFO Admitted factor 18 'kurtosis_signal' (IC=0.0827, max_corr=0.1313, category=Higher-Moment)
+2026-03-18 13:46:50,601 INFO Admitted factor 19 'vwap_trend' (IC=0.1029, max_corr=0.4306, category=Regression)
+2026-03-18 13:46:51,783 INFO Admitted factor 20 'cumulative_flow' (IC=0.0829, max_corr=0.1653, category=Momentum)
+2026-03-18 13:46:53,122 INFO Admitted factor 21 'conditional_vol' (IC=0.0831, max_corr=0.2941, category=Regime-Conditional)
+2026-03-18 13:46:53,124 INFO Iter   3 | gen=10 ic_ok=10 corr_ok=10 +5 -5 | lib=21 yield=50.0% best_ic=0.1029 mean_ic=0.0854 (25.2s)
+2026-03-18 13:46:53,125 INFO Iteration 3: Library size=21, Admitted=5, Yield=50.0%, AvgCorr=0.099
+2026-03-18 13:46:53,126 INFO Saved library metadata to output/checkpoint/library.json (21 factors)
+2026-03-18 13:46:53,500 INFO Saved signal cache to output/checkpoint/library_signals.npz (21 arrays)
+2026-03-18 13:46:53,503 INFO Session saved to output/checkpoint
+2026-03-18 13:46:53,503 INFO ============================================================
+2026-03-18 13:46:53,503 INFO Session complete
+2026-03-18 13:46:53,503 INFO Library: 21 factors | 3 iterations | 45s total
+2026-03-18 13:46:53,503 INFO Candidates: 30 generated, 21 admitted (70.0% yield)
+2026-03-18 13:46:53,503 INFO ============================================================
+2026-03-18 13:46:53,504 INFO Session log exported to output/session_log.json
+2026-03-18 13:46:53,506 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:47:04,118 INFO Admitted factor 17 'beta_momentum' (IC=0.0826, max_corr=0.2471, category=PV-Correlation)
+2026-03-18 13:47:04,697 INFO ============================================================
+2026-03-18 13:47:04,698 INFO FactorMiner session started
+2026-03-18 13:47:04,698 INFO Target library: 20 | Batch: 10 | Max iters: 3
+2026-03-18 13:47:04,698 INFO ============================================================
+2026-03-18 13:47:05,328 INFO Admitted factor 18 'kurtosis_signal' (IC=0.0827, max_corr=0.1313, category=Higher-Moment)
+2026-03-18 13:47:05,717 INFO Admitted factor 17 'beta_momentum' (IC=0.0826, max_corr=0.2471, category=PV-Correlation)
+2026-03-18 13:47:06,216 INFO Admitted factor 19 'vwap_trend' (IC=0.1029, max_corr=0.4306, category=Regression)
+2026-03-18 13:47:06,506 INFO Admitted factor 18 'kurtosis_signal' (IC=0.0827, max_corr=0.1313, category=Higher-Moment)
+2026-03-18 13:47:07,042 INFO Admitted factor 20 'cumulative_flow' (IC=0.0829, max_corr=0.1653, category=Momentum)
+2026-03-18 13:47:07,272 INFO Admitted factor 19 'vwap_trend' (IC=0.1029, max_corr=0.4306, category=Regression)
+2026-03-18 13:47:07,953 INFO Admitted factor 21 'conditional_vol' (IC=0.0831, max_corr=0.2941, category=Regime-Conditional)
+2026-03-18 13:47:07,954 INFO Iter   3 | gen=10 ic_ok=10 corr_ok=10 +5 -5 | lib=21 yield=50.0% best_ic=0.1029 mean_ic=0.0854 (28.0s)
+2026-03-18 13:47:07,955 INFO Iteration 3: Library size=21, Admitted=5, Yield=50.0%, AvgCorr=0.099
+2026-03-18 13:47:07,956 INFO Saved library metadata to output/checkpoint/library.json (21 factors)
+2026-03-18 13:47:08,116 INFO Admitted factor 20 'cumulative_flow' (IC=0.0829, max_corr=0.1653, category=Momentum)
+2026-03-18 13:47:08,222 INFO Saved signal cache to output/checkpoint/library_signals.npz (21 arrays)
+2026-03-18 13:47:08,223 INFO Session saved to output/checkpoint
+2026-03-18 13:47:08,223 INFO ============================================================
+2026-03-18 13:47:08,223 INFO Session complete
+2026-03-18 13:47:08,224 INFO Library: 21 factors | 3 iterations | 49s total
+2026-03-18 13:47:08,224 INFO Candidates: 30 generated, 21 admitted (70.0% yield)
+2026-03-18 13:47:08,224 INFO ============================================================
+2026-03-18 13:47:08,224 INFO Session log exported to output/session_log.json
+2026-03-18 13:47:08,225 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:47:08,676 INFO Admitted factor 1 'momentum_reversal' (IC=0.0793, max_corr=0.0000, category=Momentum)
+2026-03-18 13:47:08,720 INFO Admitted factor 2 'price_range_ratio' (IC=0.0992, max_corr=0.0000, category=Other)
+2026-03-18 13:47:08,800 INFO Admitted factor 3 'vwap_deviation' (IC=0.0975, max_corr=0.0000, category=VWAP)
+2026-03-18 13:47:08,920 INFO Admitted factor 4 'return_skew' (IC=0.0796, max_corr=0.0000, category=Higher-Moment)
+2026-03-18 13:47:08,986 INFO Admitted factor 21 'conditional_vol' (IC=0.0831, max_corr=0.2941, category=Regime-Conditional)
+2026-03-18 13:47:08,987 INFO Iter   3 | gen=10 ic_ok=10 corr_ok=10 +5 -5 | lib=21 yield=50.0% best_ic=0.1029 mean_ic=0.0854 (27.8s)
+2026-03-18 13:47:08,987 INFO Iteration 3: Library size=21, Admitted=5, Yield=50.0%, AvgCorr=0.099
+2026-03-18 13:47:08,988 INFO Saved library metadata to output/checkpoint/library.json (21 factors)
+2026-03-18 13:47:09,084 INFO Admitted factor 5 'intraday_momentum' (IC=0.0775, max_corr=0.0000, category=Cross-Sectional)
+2026-03-18 13:47:09,239 INFO Saved signal cache to output/checkpoint/library_signals.npz (21 arrays)
+2026-03-18 13:47:09,240 INFO Session saved to output/checkpoint
+2026-03-18 13:47:09,240 INFO ============================================================
+2026-03-18 13:47:09,240 INFO Session complete
+2026-03-18 13:47:09,240 INFO Library: 21 factors | 3 iterations | 48s total
+2026-03-18 13:47:09,240 INFO Candidates: 30 generated, 21 admitted (70.0% yield)
+2026-03-18 13:47:09,240 INFO ============================================================
+2026-03-18 13:47:09,241 INFO Session log exported to output/session_log.json
+2026-03-18 13:47:09,242 INFO Factor library exported to output/factor_library.json
+2026-03-18 13:47:09,284 INFO Admitted factor 6 'volume_price_corr' (IC=0.0793, max_corr=0.0000, category=PV-Correlation)
+2026-03-18 13:47:09,515 INFO Admitted factor 7 'amt_acceleration' (IC=0.0830, max_corr=0.0000, category=Amount)
+2026-03-18 13:47:09,763 INFO Admitted factor 8 'close_high_ratio' (IC=0.0810, max_corr=0.0000, category=Extrema)
+2026-03-18 13:47:09,764 INFO Iter   1 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=8 yield=80.0% best_ic=0.0992 mean_ic=0.0831 (5.0s)
+2026-03-18 13:47:09,764 INFO Iteration 1: Library size=8, Admitted=8, Yield=80.0%, AvgCorr=0.102
+2026-03-18 13:47:09,766 INFO Saved library metadata to output/checkpoint/library.json (8 factors)
+2026-03-18 13:47:09,850 INFO Saved signal cache to output/checkpoint/library_signals.npz (8 arrays)
+2026-03-18 13:47:09,851 INFO Session saved to output/checkpoint
+2026-03-18 13:47:18,757 INFO Admitted factor 9 'volatility_ratio' (IC=0.0786, max_corr=0.0892, category=Volatility)
+2026-03-18 13:47:19,100 INFO Admitted factor 10 'mean_reversion' (IC=0.0925, max_corr=0.4419, category=Smoothing)
+2026-03-18 13:47:19,440 INFO Admitted factor 11 'volume_trend' (IC=0.0801, max_corr=0.3558, category=Regression)
+2026-03-18 13:47:19,801 INFO Admitted factor 12 'amt_volume_div' (IC=0.0830, max_corr=0.1019, category=PV-Correlation)
+2026-03-18 13:47:20,198 INFO Admitted factor 13 'high_low_decay' (IC=0.0950, max_corr=0.4924, category=Other)
+2026-03-18 13:47:20,635 INFO Admitted factor 14 'residual_vol' (IC=0.0769, max_corr=0.2395, category=Regression)
+2026-03-18 13:47:21,101 INFO Admitted factor 15 'open_gap' (IC=0.0970, max_corr=0.1400, category=Momentum)
+2026-03-18 13:47:21,614 INFO Admitted factor 16 'log_turnover' (IC=0.0687, max_corr=0.0820, category=Amount)
+2026-03-18 13:47:21,615 INFO Iter   2 | gen=10 ic_ok=10 corr_ok=10 +8 -2 | lib=16 yield=80.0% best_ic=0.0970 mean_ic=0.0831 (11.8s)
+2026-03-18 13:47:21,616 INFO Iteration 2: Library size=16, Admitted=8, Yield=80.0%, AvgCorr=0.101
+2026-03-18 13:47:21,616 INFO Saved library metadata to output/checkpoint/library.json (16 factors)
+2026-03-18 13:47:21,775 INFO Saved signal cache to output/checkpoint/library_signals.npz (16 arrays)
+2026-03-18 13:47:21,776 INFO Session saved to output/checkpoint
+2026-03-18 13:47:35,026 INFO Admitted factor 17 'beta_momentum' (IC=0.0826, max_corr=0.2471, category=PV-Correlation)
+2026-03-18 13:47:35,568 INFO Admitted factor 18 'kurtosis_signal' (IC=0.0827, max_corr=0.1313, category=Higher-Moment)
+2026-03-18 13:47:36,152 INFO Admitted factor 19 'vwap_trend' (IC=0.1029, max_corr=0.4306, category=Regression)
+2026-03-18 13:47:36,809 INFO Admitted factor 20 'cumulative_flow' (IC=0.0829, max_corr=0.1653, category=Momentum)
+2026-03-18 13:47:37,483 INFO Admitted factor 21 'conditional_vol' (IC=0.0831, max_corr=0.2941, category=Regime-Conditional)
+2026-03-18 13:47:37,485 INFO Iter   3 | gen=10 ic_ok=10 corr_ok=10 +5 -5 | lib=21 yield=50.0% best_ic=0.1029 mean_ic=0.0854 (15.7s)
+2026-03-18 13:47:37,485 INFO Iteration 3: Library size=21, Admitted=5, Yield=50.0%, AvgCorr=0.099
+2026-03-18 13:47:37,486 INFO Saved library metadata to output/checkpoint/library.json (21 factors)
+2026-03-18 13:47:37,707 INFO Saved signal cache to output/checkpoint/library_signals.npz (21 arrays)
+2026-03-18 13:47:37,709 INFO Session saved to output/checkpoint
+2026-03-18 13:47:37,709 INFO ============================================================
+2026-03-18 13:47:37,709 INFO Session complete
+2026-03-18 13:47:37,709 INFO Library: 21 factors | 3 iterations | 33s total
+2026-03-18 13:47:37,709 INFO Candidates: 30 generated, 21 admitted (70.0% yield)
+2026-03-18 13:47:37,709 INFO ============================================================
+2026-03-18 13:47:37,709 INFO Session log exported to output/session_log.json
+2026-03-18 13:47:37,711 INFO Factor library exported to output/factor_library.json
+2026-03-18 14:02:20,281 INFO ============================================================
+2026-03-18 14:02:20,281 INFO FactorMiner session started
+2026-03-18 14:02:20,281 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 14:02:20,281 INFO ============================================================
+2026-03-18 14:02:20,297 INFO Admitted factor 1 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 14:02:20,298 INFO Iter   1 | gen=5 ic_ok=1 corr_ok=1 +1 -4 | lib=1 yield=20.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-18 14:02:20,299 INFO Iteration 1: Library size=1, Admitted=1, Yield=20.0%, AvgCorr=0.000
+2026-03-18 14:02:20,299 INFO Saved library metadata to output/checkpoint/library.json (1 factors)
+2026-03-18 14:02:20,300 INFO Saved signal cache to output/checkpoint/library_signals.npz (1 arrays)
+2026-03-18 14:02:20,302 INFO Session saved to output/checkpoint
+2026-03-18 14:02:20,302 INFO ============================================================
+2026-03-18 14:02:20,302 INFO Session complete
+2026-03-18 14:02:20,302 INFO Library: 1 factors | 1 iterations | 0s total
+2026-03-18 14:02:20,302 INFO Candidates: 5 generated, 1 admitted (20.0% yield)
+2026-03-18 14:02:20,302 INFO ============================================================
+2026-03-18 14:02:20,303 INFO Session log exported to output/session_log.json
+2026-03-18 14:02:20,303 INFO Factor library exported to output/factor_library.json
+2026-03-18 14:02:20,320 INFO Admitted factor 1 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 14:02:20,320 INFO Removed factor 1 'price_range_ratio' from library
+2026-03-18 14:02:20,322 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-18 14:02:20,327 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-18 14:02:20,327 INFO Removed factor 1 'factor_a' from library
+2026-03-18 14:03:14,719 INFO ============================================================
+2026-03-18 14:03:14,719 INFO FactorMiner session started
+2026-03-18 14:03:14,719 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-18 14:03:14,719 INFO ============================================================
+2026-03-18 14:03:14,734 INFO Admitted factor 1 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 14:03:14,735 INFO Iter   1 | gen=5 ic_ok=1 corr_ok=1 +1 -4 | lib=1 yield=20.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-18 14:03:14,735 INFO Iteration 1: Library size=1, Admitted=1, Yield=20.0%, AvgCorr=0.000
+2026-03-18 14:03:14,736 INFO Saved library metadata to output/checkpoint/library.json (1 factors)
+2026-03-18 14:03:14,736 INFO Saved signal cache to output/checkpoint/library_signals.npz (1 arrays)
+2026-03-18 14:03:14,737 INFO Session saved to output/checkpoint
+2026-03-18 14:03:14,737 INFO ============================================================
+2026-03-18 14:03:14,737 INFO Session complete
+2026-03-18 14:03:14,737 INFO Library: 1 factors | 1 iterations | 0s total
+2026-03-18 14:03:14,737 INFO Candidates: 5 generated, 1 admitted (20.0% yield)
+2026-03-18 14:03:14,737 INFO ============================================================
+2026-03-18 14:03:14,738 INFO Session log exported to output/session_log.json
+2026-03-18 14:03:14,738 INFO Factor library exported to output/factor_library.json
+2026-03-18 14:03:14,751 INFO Admitted factor 1 'price_range_ratio' (IC=0.2486, max_corr=0.0000, category=Other)
+2026-03-18 14:03:14,751 INFO Removed factor 1 'price_range_ratio' from library
+2026-03-18 14:03:14,753 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-18 14:03:14,758 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-18 14:03:14,758 INFO Removed factor 1 'factor_a' from library

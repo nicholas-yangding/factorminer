@@ -406,6 +406,7 @@ def main():
         correlation_threshold=0.5,
         fast_screen_assets=50,
         num_workers=1,
+        signal_failure_policy="synthetic",
     )
 
     loop = RalphLoop(

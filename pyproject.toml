@@ -1,13 +1,13 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "factorminer"
 version = "0.1.0"
 description = "LLM-powered quantitative factor mining with evolutionary search"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "FactorMiner Team"},
@@ -41,18 +41,50 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gpu = ["cupy-cuda12x"]
-llm = ["openai", "anthropic", "google-generativeai", "sentence-transformers>=2.0", "faiss-cpu>=1.7"]
-dev = ["pytest>=7.0", "pytest-cov", "ruff", "mypy"]
-all = ["factorminer[gpu,llm,dev]"]
+gpu = [
+    "cupy-cuda12x; platform_system == 'Linux'",
+]
+llm = [
+    "openai",
+    "anthropic",
+    "google-generativeai",
+    "sentence-transformers>=2.0",
+    "faiss-cpu>=1.7",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+all = [
+    "cupy-cuda12x; platform_system == 'Linux'",
+    "openai",
+    "anthropic",
+    "google-generativeai",
+    "sentence-transformers>=2.0",
+    "faiss-cpu>=1.7",
+    "pytest>=7.0",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
 
 [project.scripts]
 factorminer = "factorminer.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/factorminer/factorminer"
-Documentation = "https://factorminer.readthedocs.io"
-Repository = "https://github.com/factorminer/factorminer"
+Homepage = "https://github.com/minihellboy/factorminer"
+Repository = "https://github.com/minihellboy/factorminer"
+Issues = "https://github.com/minihellboy/factorminer/issues"
 
 [tool.setuptools.packages.find]
 include = ["factorminer*"]
