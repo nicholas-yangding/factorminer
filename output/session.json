@@ -1,5 +1,5 @@
 {
-  "session_id": "20260318_184059",
+  "session_id": "20260319_125236",
   "config": {
     "target_library_size": 3,
     "batch_size": 5,
@@ -17,8 +17,8 @@
     "signal_failure_policy": "reject"
   },
   "output_dir": "./output",
-  "start_time": "2026-03-18T18:40:59.118334",
-  "end_time": "2026-03-18T18:40:59.133336",
+  "start_time": "2026-03-19T12:52:36.633890",
+  "end_time": "2026-03-19T12:52:36.644699",
   "status": "completed",
   "total_iterations": 1,
   "last_library_size": 0,
@@ -38,7 +38,7 @@
       "library_size": 0,
       "avg_correlation": 0.0,
       "max_correlation": 0.0,
-      "elapsed_seconds": 0.011964797973632812,
+      "elapsed_seconds": 0.008219003677368164,
       "budget": {
         "llm_calls": 1,
         "llm_prompt_tokens": 0,
@@ -50,7 +50,7 @@
       "candidates_before_canon": 5,
       "canonical_duplicates_removed": 0,
       "phase2_rejections": 0,
-      "timestamp": "2026-03-18T18:40:59.132068"
+      "timestamp": "2026-03-19T12:52:36.643364"
     }
   ]
 }

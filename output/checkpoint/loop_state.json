@@ -6,7 +6,7 @@
     "llm_calls": 1,
     "llm_prompt_tokens": 0,
     "llm_completion_tokens": 0,
-    "compute_seconds": 0.011964797973632812,
+    "compute_seconds": 0.008219003677368164,
     "max_llm_calls": 0,
     "max_wall_seconds": 0
   }

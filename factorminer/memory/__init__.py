@@ -43,6 +43,17 @@ try:
 except ImportError:
     pass
 
+try:
+    from factorminer.memory.online_regime_memory import (
+        OnlineRegimeMemory,
+        OnlineMemoryUpdater,
+        RegimeSpecificPatternStore,
+        RegimeTransitionForecaster,
+        MemoryForgetCurve,
+    )
+except ImportError:
+    pass
+
 __all__ = [
     # Data structures
     "ExperienceMemory",
@@ -64,4 +75,10 @@ __all__ = [
     "FormulaEmbedder",
     # Phase 2: Enhanced Retrieval
     "retrieve_memory_enhanced",
+    # Phase 2: Online Regime Memory
+    "OnlineRegimeMemory",
+    "OnlineMemoryUpdater",
+    "RegimeSpecificPatternStore",
+    "RegimeTransitionForecaster",
+    "MemoryForgetCurve",
 ]

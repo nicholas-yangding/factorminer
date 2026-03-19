@@ -17,6 +17,7 @@ from factorminer.core.library_io import (
 )
 from factorminer.core.parser import parse, try_parse
 from factorminer.core.ralph_loop import RalphLoop
+from factorminer.core.helix_loop import HelixLoop
 from factorminer.core.session import MiningSession
 from factorminer.core.config import MiningConfig as CoreMiningConfig
 from factorminer.core.types import (
@@ -48,8 +49,9 @@ __all__ = [
     # Parser
     "parse",
     "try_parse",
-    # Ralph Loop
+    # Loops
     "RalphLoop",
+    "HelixLoop",
     "MiningSession",
     "CoreMiningConfig",
     # Types

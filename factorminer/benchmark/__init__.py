@@ -12,8 +12,27 @@ from factorminer.benchmark.runtime import (
     run_table1_benchmark,
     select_frozen_top_k,
 )
+from factorminer.benchmark.helix_benchmark import (
+    HelixBenchmark,
+    BenchmarkResult,
+    MethodResult,
+    DMTestResult,
+    StatisticalComparisonTests,
+    SpeedBenchmark,
+    OperatorSpeedResult,
+    PipelineSpeedResult,
+)
+from factorminer.benchmark.ablation import (
+    AblationStudy,
+    AblationResult,
+    AblatedMethodRunner,
+    ABLATION_CONFIGS,
+    ABLATION_LABELS,
+    run_full_ablation_study,
+)
 
 __all__ = [
+    # legacy runtime benchmark
     "BenchmarkManifest",
     "build_benchmark_library",
     "evaluate_frozen_set",
@@ -24,4 +43,20 @@ __all__ = [
     "run_efficiency_benchmark",
     "run_table1_benchmark",
     "select_frozen_top_k",
+    # helix benchmark
+    "HelixBenchmark",
+    "BenchmarkResult",
+    "MethodResult",
+    "DMTestResult",
+    "StatisticalComparisonTests",
+    "SpeedBenchmark",
+    "OperatorSpeedResult",
+    "PipelineSpeedResult",
+    # ablation
+    "AblationStudy",
+    "AblationResult",
+    "AblatedMethodRunner",
+    "ABLATION_CONFIGS",
+    "ABLATION_LABELS",
+    "run_full_ablation_study",
 ]

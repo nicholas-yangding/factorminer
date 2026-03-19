@@ -1255,3 +1255,346 @@
 2026-03-18 18:40:59,144 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
 2026-03-18 18:40:59,148 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
 2026-03-18 18:40:59,148 INFO Removed factor 1 'factor_a' from library
+2026-03-19 12:35:33,855 INFO ============================================================
+2026-03-19 12:35:33,856 INFO FactorMiner session started
+2026-03-19 12:35:33,856 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-19 12:35:33,856 INFO ============================================================
+2026-03-19 12:35:33,866 INFO Iter   1 | gen=5 ic_ok=0 corr_ok=0 +0 -5 | lib=0 yield=0.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-19 12:35:33,866 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:35:33,866 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:35:33,867 INFO Session saved to output/checkpoint
+2026-03-19 12:35:33,867 INFO ============================================================
+2026-03-19 12:35:33,867 INFO Session complete
+2026-03-19 12:35:33,867 INFO Library: 0 factors | 1 iterations | 0s total
+2026-03-19 12:35:33,867 INFO Candidates: 5 generated, 0 admitted (0.0% yield)
+2026-03-19 12:35:33,867 INFO ============================================================
+2026-03-19 12:35:33,868 INFO Session log exported to output/session_log.json
+2026-03-19 12:35:33,868 INFO Factor library exported to output/factor_library.json
+2026-03-19 12:35:33,877 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,880 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-19 12:35:33,880 INFO Removed factor 1 'factor_a' from library
+2026-03-19 12:35:33,882 INFO Admitted factor 1 'f1' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,883 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,887 INFO Admitted factor 2 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,888 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,893 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,897 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,897 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,898 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,901 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,905 INFO Admitted factor 1 'old_factor' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,905 INFO Replaced factor 1 with 2 'new_factor' (IC=0.1500)
+2026-03-19 12:35:33,906 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,906 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,910 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,917 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,918 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,922 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,930 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,941 INFO Admitted factor 4 'f3' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,942 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,946 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,953 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,972 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,975 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:33,983 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:33,983 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,987 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:33,994 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:33,995 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:33,998 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:34,005 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:34,006 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:34,010 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:34,017 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:34,017 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:34,022 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:34,029 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:34,030 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:34,033 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:34,041 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:34,041 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:34,045 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:34,052 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:34,053 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:34,056 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:34,064 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,177 INFO ============================================================
+2026-03-19 12:35:47,177 INFO FactorMiner session started
+2026-03-19 12:35:47,177 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-19 12:35:47,177 INFO ============================================================
+2026-03-19 12:35:47,186 INFO Iter   1 | gen=5 ic_ok=0 corr_ok=0 +0 -5 | lib=0 yield=0.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-19 12:35:47,187 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:35:47,187 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:35:47,187 INFO Session saved to output/checkpoint
+2026-03-19 12:35:47,187 INFO ============================================================
+2026-03-19 12:35:47,187 INFO Session complete
+2026-03-19 12:35:47,187 INFO Library: 0 factors | 1 iterations | 0s total
+2026-03-19 12:35:47,188 INFO Candidates: 5 generated, 0 admitted (0.0% yield)
+2026-03-19 12:35:47,188 INFO ============================================================
+2026-03-19 12:35:47,188 INFO Session log exported to output/session_log.json
+2026-03-19 12:35:47,188 INFO Factor library exported to output/factor_library.json
+2026-03-19 12:35:47,197 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,200 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,200 INFO Removed factor 1 'factor_a' from library
+2026-03-19 12:35:47,203 INFO Admitted factor 1 'f1' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,203 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,207 INFO Admitted factor 2 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,208 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,212 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,216 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,216 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,217 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,221 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,225 INFO Admitted factor 1 'old_factor' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,225 INFO Replaced factor 1 with 2 'new_factor' (IC=0.1500)
+2026-03-19 12:35:47,226 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,226 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,230 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,237 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,238 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,242 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,249 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,260 INFO Admitted factor 4 'f3' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,261 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,264 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,271 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,290 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,294 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,301 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,302 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,305 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,312 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,313 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,317 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,324 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,324 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,328 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,335 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,336 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,340 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,347 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,348 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,351 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,359 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,359 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,363 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,371 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:35:47,372 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:35:47,375 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:35:47,383 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,622 INFO ============================================================
+2026-03-19 12:44:46,622 INFO FactorMiner session started
+2026-03-19 12:44:46,622 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-19 12:44:46,622 INFO ============================================================
+2026-03-19 12:44:46,632 INFO Iter   1 | gen=5 ic_ok=0 corr_ok=0 +0 -5 | lib=0 yield=0.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-19 12:44:46,632 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:44:46,632 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:44:46,633 INFO Session saved to output/checkpoint
+2026-03-19 12:44:46,633 INFO ============================================================
+2026-03-19 12:44:46,633 INFO Session complete
+2026-03-19 12:44:46,633 INFO Library: 0 factors | 1 iterations | 0s total
+2026-03-19 12:44:46,633 INFO Candidates: 5 generated, 0 admitted (0.0% yield)
+2026-03-19 12:44:46,633 INFO ============================================================
+2026-03-19 12:44:46,633 INFO Session log exported to output/session_log.json
+2026-03-19 12:44:46,633 INFO Factor library exported to output/factor_library.json
+2026-03-19 12:44:46,643 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,646 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,646 INFO Removed factor 1 'factor_a' from library
+2026-03-19 12:44:46,648 INFO Admitted factor 1 'f1' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,649 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,653 INFO Admitted factor 2 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,654 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,658 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,662 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,663 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,663 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,668 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,672 INFO Admitted factor 1 'old_factor' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,672 INFO Replaced factor 1 with 2 'new_factor' (IC=0.1500)
+2026-03-19 12:44:46,673 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,673 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,677 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,685 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,685 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,689 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,697 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,708 INFO Admitted factor 4 'f3' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,708 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,712 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,719 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,739 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,743 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,751 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,752 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,756 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,764 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,765 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,769 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,777 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,777 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,781 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,788 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,789 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,792 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,800 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,800 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,804 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,811 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,812 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,815 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,823 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:44:46,824 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:44:46,828 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:44:46,835 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,741 INFO ============================================================
+2026-03-19 12:47:20,742 INFO FactorMiner session started
+2026-03-19 12:47:20,742 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-19 12:47:20,742 INFO ============================================================
+2026-03-19 12:47:20,752 INFO Iter   1 | gen=5 ic_ok=0 corr_ok=0 +0 -5 | lib=0 yield=0.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-19 12:47:20,752 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:47:20,752 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:47:20,753 INFO Session saved to output/checkpoint
+2026-03-19 12:47:20,753 INFO ============================================================
+2026-03-19 12:47:20,753 INFO Session complete
+2026-03-19 12:47:20,753 INFO Library: 0 factors | 1 iterations | 0s total
+2026-03-19 12:47:20,753 INFO Candidates: 5 generated, 0 admitted (0.0% yield)
+2026-03-19 12:47:20,753 INFO ============================================================
+2026-03-19 12:47:20,753 INFO Session log exported to output/session_log.json
+2026-03-19 12:47:20,754 INFO Factor library exported to output/factor_library.json
+2026-03-19 12:47:20,763 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,766 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,766 INFO Removed factor 1 'factor_a' from library
+2026-03-19 12:47:20,769 INFO Admitted factor 1 'f1' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,769 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,773 INFO Admitted factor 2 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,774 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,778 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,782 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,782 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,782 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,787 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,791 INFO Admitted factor 1 'old_factor' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,792 INFO Replaced factor 1 with 2 'new_factor' (IC=0.1500)
+2026-03-19 12:47:20,792 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,793 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,796 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,804 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,804 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,808 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,825 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,839 INFO Admitted factor 4 'f3' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,840 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,843 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,854 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,880 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,884 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,894 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,895 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,900 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,908 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,908 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,913 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,921 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,922 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,925 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,933 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,934 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,938 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,948 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,949 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,953 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,961 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,961 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,965 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,973 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:47:20,974 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:47:20,977 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:47:20,985 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:50:55,995 INFO ============================================================
+2026-03-19 12:50:55,995 INFO FactorMiner session started
+2026-03-19 12:50:55,995 INFO Target library: 20 | Batch: 10 | Max iters: 3
+2026-03-19 12:50:55,995 INFO ============================================================
+2026-03-19 12:50:57,339 INFO Iter   1 | gen=10 ic_ok=0 corr_ok=0 +0 -10 | lib=0 yield=0.0% best_ic=0.0992 mean_ic=0.0831 (1.3s)
+2026-03-19 12:50:57,339 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:50:57,340 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:50:57,340 INFO Session saved to output/checkpoint
+2026-03-19 12:50:58,693 INFO Iter   2 | gen=10 ic_ok=0 corr_ok=0 +0 -10 | lib=0 yield=0.0% best_ic=0.0970 mean_ic=0.0831 (1.4s)
+2026-03-19 12:50:58,693 INFO Iteration 2: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:50:58,693 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:50:58,693 INFO Session saved to output/checkpoint
+2026-03-19 12:51:00,054 INFO Iter   3 | gen=10 ic_ok=0 corr_ok=0 +0 -10 | lib=0 yield=0.0% best_ic=0.1029 mean_ic=0.0854 (1.4s)
+2026-03-19 12:51:00,054 INFO Iteration 3: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:51:00,055 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:51:00,055 INFO Session saved to output/checkpoint
+2026-03-19 12:51:00,055 INFO ============================================================
+2026-03-19 12:51:00,055 INFO Session complete
+2026-03-19 12:51:00,055 INFO Library: 0 factors | 3 iterations | 4s total
+2026-03-19 12:51:00,055 INFO Candidates: 30 generated, 0 admitted (0.0% yield)
+2026-03-19 12:51:00,055 INFO ============================================================
+2026-03-19 12:51:00,055 INFO Session log exported to output/session_log.json
+2026-03-19 12:51:00,056 INFO Factor library exported to output/factor_library.json
+2026-03-19 12:52:36,634 INFO ============================================================
+2026-03-19 12:52:36,634 INFO FactorMiner session started
+2026-03-19 12:52:36,634 INFO Target library: 3 | Batch: 5 | Max iters: 1
+2026-03-19 12:52:36,634 INFO ============================================================
+2026-03-19 12:52:36,643 INFO Iter   1 | gen=5 ic_ok=0 corr_ok=0 +0 -5 | lib=0 yield=0.0% best_ic=0.2486 mean_ic=0.0497 (0.0s)
+2026-03-19 12:52:36,643 INFO Iteration 1: Library size=0, Admitted=0, Yield=0.0%, AvgCorr=0.000
+2026-03-19 12:52:36,643 INFO Saved library metadata to output/checkpoint/library.json (0 factors)
+2026-03-19 12:52:36,644 INFO Session saved to output/checkpoint
+2026-03-19 12:52:36,644 INFO ============================================================
+2026-03-19 12:52:36,644 INFO Session complete
+2026-03-19 12:52:36,644 INFO Library: 0 factors | 1 iterations | 0s total
+2026-03-19 12:52:36,644 INFO Candidates: 5 generated, 0 admitted (0.0% yield)
+2026-03-19 12:52:36,644 INFO ============================================================
+2026-03-19 12:52:36,644 INFO Session log exported to output/session_log.json
+2026-03-19 12:52:36,644 INFO Factor library exported to output/factor_library.json
+2026-03-19 12:52:36,653 INFO Admitted factor 1 'factor_a' (IC=0.1000, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,657 INFO Admitted factor 2 'factor_b' (IC=0.0800, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,657 INFO Removed factor 1 'factor_a' from library
+2026-03-19 12:52:36,660 INFO Admitted factor 1 'f1' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,660 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,664 INFO Admitted factor 2 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,665 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,669 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,672 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,673 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,673 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,678 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,682 INFO Admitted factor 1 'old_factor' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,682 INFO Replaced factor 1 with 2 'new_factor' (IC=0.1500)
+2026-03-19 12:52:36,682 INFO Admitted factor 1 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,683 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,686 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,693 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,694 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,698 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,705 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,715 INFO Admitted factor 4 'f3' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,716 INFO Admitted factor 1 'f0' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,719 INFO Admitted factor 2 'f1' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,726 INFO Admitted factor 3 'f2' (IC=0.0600, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,744 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,748 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,755 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:52:36,755 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,759 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,765 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:52:36,766 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,769 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,776 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:52:36,776 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,780 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,787 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:52:36,787 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,791 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,797 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:52:36,798 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,801 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,808 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:52:36,809 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,812 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,820 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)
+2026-03-19 12:52:36,820 INFO Admitted factor 1 'test_factor_0' (IC=0.0500, max_corr=0.0000, category=test)
+2026-03-19 12:52:36,824 INFO Admitted factor 2 'test_factor_1' (IC=0.0600, max_corr=0.1000, category=test)
+2026-03-19 12:52:36,830 INFO Admitted factor 3 'test_factor_2' (IC=0.0700, max_corr=0.2000, category=test)

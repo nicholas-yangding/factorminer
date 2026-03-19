@@ -304,3 +304,341 @@ class PromptBuilder:
         )
 
         return "\n".join(sections)
+
+
+# ---------------------------------------------------------------------------
+# New specialist/critic/debate prompt builder functions
+# ---------------------------------------------------------------------------
+
+def build_specialist_prompt(
+    specialist_name: str,
+    specialist_domain: str,
+    specialist_hypothesis: str,
+    preferred_operators: List[str],
+    preferred_features: List[str],
+    example_factors: List[str],
+    avoid_patterns: List[str],
+    memory_signal: Optional[Dict[str, Any]] = None,
+    library_diagnostics: Optional[Dict[str, Any]] = None,
+    regime_context: str = "",
+    n_proposals: int = 15,
+    success_rate: Optional[float] = None,
+) -> str:
+    """Build a rich context-aware user prompt for a specialist agent.
+
+    Parameters
+    ----------
+    specialist_name : str
+        Human-readable name of the specialist (e.g. ``"MomentumMiner"``).
+    specialist_domain : str
+        Short domain description for the specialist.
+    specialist_hypothesis : str
+        Core economic hypothesis guiding this specialist.
+    preferred_operators : list[str]
+        Operator names this specialist should lean on.
+    preferred_features : list[str]
+        Feature names this specialist prefers.
+    example_factors : list[str]
+        Reference formula examples for this specialist.
+    avoid_patterns : list[str]
+        Structural patterns to explicitly avoid.
+    memory_signal : dict or None
+        Experience memory context (recommended directions, etc.).
+    library_diagnostics : dict or None
+        Library state (size, saturation, recent admissions).
+    regime_context : str
+        Current market regime description.
+    n_proposals : int
+        Number of proposals to request.
+    success_rate : float or None
+        Historical success rate for this specialist (for context).
+
+    Returns
+    -------
+    str
+        Fully assembled specialist user prompt.
+    """
+    memory_signal = memory_signal or {}
+    library_diagnostics = library_diagnostics or {}
+    sections: List[str] = []
+
+    # Header
+    sections.append(
+        f"## SPECIALIST TASK: {specialist_name}\n"
+        f"Domain: {specialist_domain}\n"
+        f"Hypothesis: {specialist_hypothesis}"
+    )
+
+    if success_rate is not None:
+        sections.append(
+            f"Your historical admission rate: {success_rate:.1%}  "
+            f"(aim to exceed this by proposing higher-quality factors)"
+        )
+
+    # Regime context
+    if regime_context:
+        sections.append(
+            f"\n## CURRENT MARKET REGIME\n{regime_context}"
+        )
+
+    # Library state
+    lib_size = library_diagnostics.get("size", 0)
+    target = library_diagnostics.get("target_size", 110)
+    sections.append(
+        f"\n## LIBRARY STATUS\nCurrent: {lib_size}/{target} factors."
+    )
+
+    recent = library_diagnostics.get("recent_admissions", [])
+    if recent:
+        sections.append(
+            "Recently admitted (avoid similar patterns):\n"
+            + "\n".join(f"  - {f}" for f in recent[-8:])
+        )
+
+    saturation = library_diagnostics.get("domain_saturation", {})
+    if saturation:
+        sat_lines = [
+            f"  {d}: {p:.0%} saturated" for d, p in saturation.items()
+        ]
+        sections.append("Domain saturation:\n" + "\n".join(sat_lines))
+
+    # Memory signal injections
+    rec_dirs = memory_signal.get("recommended_directions", [])
+    if rec_dirs:
+        sections.append(
+            "\n## RECOMMENDED DIRECTIONS\n"
+            + "\n".join(f"  * {d}" for d in rec_dirs)
+        )
+
+    forbidden = memory_signal.get("forbidden_directions", [])
+    if forbidden:
+        sections.append(
+            "\n## FORBIDDEN DIRECTIONS\n"
+            + "\n".join(f"  X {d}" for d in forbidden)
+        )
+
+    insights = memory_signal.get("strategic_insights", [])
+    if insights:
+        sections.append(
+            "\n## STRATEGIC INSIGHTS\n"
+            + "\n".join(f"  - {ins}" for ins in insights)
+        )
+
+    helix_text = memory_signal.get("prompt_text", "").strip()
+    if helix_text:
+        sections.append(f"\n## HELIX CONTEXT\n{helix_text}")
+
+    comp_patterns = memory_signal.get("complementary_patterns", [])
+    if comp_patterns:
+        sections.append(
+            "\n## COMPLEMENTARY PATTERNS (explore these)\n"
+            + "\n".join(f"  + {p}" for p in comp_patterns)
+        )
+
+    warn = memory_signal.get("conflict_warnings", [])
+    if warn:
+        sections.append(
+            "\n## SATURATION WARNINGS\n"
+            + "\n".join(f"  ! {w}" for w in warn)
+        )
+
+    gaps = memory_signal.get("semantic_gaps", [])
+    if gaps:
+        sections.append(
+            "\n## SEMANTIC GAPS (underused areas to explore)\n"
+            + "\n".join(f"  ~ {g}" for g in gaps)
+        )
+
+    # Specialist focus directive
+    ops_str = ", ".join(preferred_operators)
+    feats_str = ", ".join(preferred_features)
+    sections.append(
+        f"\n## YOUR SPECIALIST FOCUS\n"
+        f"Preferred operators: {{{ops_str}}}\n"
+        f"Preferred features: {{{feats_str}}}\n"
+        f"Focus ~60% of proposals on these.  The remaining ~40% should "
+        f"explore creative cross-domain combinations."
+    )
+
+    # Domain examples
+    if example_factors:
+        sections.append(
+            "\n## DOMAIN REFERENCE EXAMPLES (structural templates, do NOT copy exactly)\n"
+            + "\n".join(f"  - {ex}" for ex in example_factors)
+        )
+
+    # Avoid patterns
+    if avoid_patterns:
+        sections.append(
+            "\n## PATTERNS TO AVOID\n"
+            + "\n".join(f"  X {av}" for av in avoid_patterns)
+        )
+
+    # Few-shot patterns from memory
+    mem_success_patterns = memory_signal.get("_few_shot_examples", [])
+    if mem_success_patterns:
+        sections.append(
+            "\n## FEW-SHOT SUCCESS PATTERNS FROM MEMORY\n"
+            "(These formulas were previously admitted -- use as structural inspiration)\n"
+            + "\n".join(f"  [+] {ex}" for ex in mem_success_patterns[:5])
+        )
+
+    # Output format
+    sections.append(
+        f"\n## OUTPUT FORMAT\n"
+        f"Generate exactly {n_proposals} novel factor candidates.\n"
+        f"Format: <number>. <factor_name>: <formula>\n"
+        f"Example: 1. momentum_reversal: Neg(CsRank(Delta($close, 5)))\n"
+        f"Rules:\n"
+        f"- factor_name: lowercase_with_underscores, unique, descriptive\n"
+        f"- formula: valid DSL expression only\n"
+        f"- No markdown, no explanations -- just the numbered list\n"
+        f"- Every formula must use only registered operators and features"
+    )
+
+    return "\n".join(sections)
+
+
+def build_critic_scoring_prompt(
+    candidates: List[Dict[str, str]],
+    existing_factors: Optional[List[str]] = None,
+    memory_signal: Optional[str] = None,
+    regime_context: str = "",
+) -> str:
+    """Build a structured JSON-output scoring prompt for the critic agent.
+
+    Parameters
+    ----------
+    candidates : list[dict]
+        List of dicts with keys ``"name"``, ``"formula"``, ``"specialist"``.
+    existing_factors : list[str] or None
+        Formula strings already in the library.
+    memory_signal : str or None
+        Free-text memory context (success patterns, etc.).
+    regime_context : str
+        Current market regime description.
+
+    Returns
+    -------
+    str
+        Fully assembled critic scoring prompt.
+    """
+    existing_factors = existing_factors or []
+    sections: List[str] = []
+
+    sections.append(
+        "## CRITIC SCORING TASK\n"
+        "Evaluate the following candidate factors for economic intuition.\n"
+        "Score each on how well it captures a plausible, economically "
+        "meaningful cross-sectional return predictor."
+    )
+
+    if regime_context:
+        sections.append(f"\n## CURRENT REGIME\n{regime_context}")
+
+    if existing_factors:
+        sections.append(
+            "\n## LIBRARY SAMPLE (existing factors to avoid duplicating)\n"
+            + "\n".join(f"  - {f}" for f in existing_factors[-12:])
+        )
+
+    if memory_signal:
+        sections.append(f"\n## MEMORY CONTEXT (success patterns)\n{memory_signal[:600]}")
+
+    sections.append("\n## CANDIDATES")
+    for c in candidates:
+        name = c.get("name", "unknown")
+        formula = c.get("formula", "")
+        specialist = c.get("specialist", "unknown")
+        sections.append(
+            f"  [{specialist}] {name}: {formula}"
+        )
+
+    sections.append(
+        "\n## SCORING CRITERIA\n"
+        "economic_intuition [0.0-1.0]:\n"
+        "  1.0 = strong economic story, appropriate complexity, novel signal\n"
+        "  0.5 = plausible but generic or overly simple\n"
+        "  0.0 = no coherent economic story, trivial, or clearly wrong\n"
+        "\nConsider:\n"
+        "  - Is there a coherent alpha story (momentum, reversal, vol, liquidity)?\n"
+        "  - Is complexity appropriate (depth 3-7, 3-5 unique operators)?\n"
+        "  - Does it use features in a semantically meaningful way?\n"
+        "  - Is it structurally distinct from existing library members?\n"
+        "  - Would a quant researcher find this plausible?"
+    )
+
+    sections.append(
+        "\n## OUTPUT FORMAT\n"
+        "One JSON object per line for each candidate:\n"
+        '{"name": "<factor_name>", "economic_intuition": <0.0-1.0>, '
+        '"rationale": "<one concise sentence>"}\n'
+        "Output ONLY the JSON lines. No markdown, no extra text."
+    )
+
+    return "\n".join(sections)
+
+
+def build_debate_synthesis_prompt(
+    all_proposals: List[Dict[str, Any]],
+    critic_scores: List[Dict[str, Any]],
+    top_k: int = 10,
+) -> str:
+    """Build a consensus synthesis prompt for the debate orchestrator.
+
+    Used when a final synthesis step is desired to resolve conflicts
+    between specialist proposals and produce a consensus ranking.
+
+    Parameters
+    ----------
+    all_proposals : list[dict]
+        All proposals with ``"name"``, ``"formula"``, ``"specialist"`` keys.
+    critic_scores : list[dict]
+        Critic scores with ``"name"`` and ``"composite_score"`` keys.
+    top_k : int
+        Number of top factors to synthesize consensus for.
+
+    Returns
+    -------
+    str
+        Debate synthesis prompt.
+    """
+    # Sort by composite score
+    score_map = {s["name"]: s.get("composite_score", 0.5) for s in critic_scores}
+    sorted_proposals = sorted(
+        all_proposals,
+        key=lambda p: score_map.get(p.get("name", ""), 0.0),
+        reverse=True,
+    )[:top_k * 2]  # take 2x top_k for synthesis
+
+    sections: List[str] = []
+    sections.append(
+        f"## DEBATE SYNTHESIS TASK\n"
+        f"Multiple specialist agents proposed the following factors.\n"
+        f"The critic has pre-scored them.  Your task is to identify the "
+        f"top {top_k} most complementary factors for a diverse library.\n"
+        f"Prioritize NOVELTY and ORTHOGONALITY over pure individual quality."
+    )
+
+    sections.append("\n## SCORED PROPOSALS (sorted by critic score)")
+    for p in sorted_proposals:
+        name = p.get("name", "?")
+        formula = p.get("formula", "?")
+        specialist = p.get("specialist", "?")
+        score = score_map.get(name, 0.5)
+        sections.append(
+            f"  [{specialist}, score={score:.2f}] {name}: {formula}"
+        )
+
+    sections.append(
+        f"\n## SELECTION CRITERIA\n"
+        f"Select the top {top_k} factors that are:\n"
+        f"  1. Diverse in operator structure (avoid near-duplicates)\n"
+        f"  2. Balanced across specialist domains where possible\n"
+        f"  3. High composite critic score\n"
+        f"  4. Economically interpretable\n"
+        f"\nOutput a ranked list: <rank>. <factor_name>\n"
+        f"No other text."
+    )
+
+    return "\n".join(sections)

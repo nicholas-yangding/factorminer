@@ -392,3 +392,232 @@ class RegimeAwareEvaluator:
         if std < 1e-12:
             return 0.0
         return float(np.mean(valid_ic)) / std
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Streaming regime detection (added for HelixFactor)
+# ---------------------------------------------------------------------------
+
+class TrendRegime(enum.Enum):
+    BULL = "bull"
+    BEAR = "bear"
+    NEUTRAL = "neutral"
+
+
+class VolRegime(enum.Enum):
+    HIGH_VOL = "high_vol"
+    LOW_VOL = "low_vol"
+    NORMAL_VOL = "normal_vol"
+
+
+class MeanRevRegime(enum.Enum):
+    TRENDING = "trending"
+    MEAN_REVERTING = "mean_reverting"
+    RANDOM_WALK = "random_walk"
+
+
+@dataclass
+class RegimeState:
+    """Composite regime state: trend + vol + mean-reversion classification."""
+    trend: TrendRegime = TrendRegime.NEUTRAL
+    vol: VolRegime = VolRegime.NORMAL_VOL
+    mean_rev: MeanRevRegime = MeanRevRegime.RANDOM_WALK
+
+    def to_dict(self) -> dict:
+        return {
+            "trend": self.trend.value,
+            "vol": self.vol.value,
+            "mean_rev": self.mean_rev.value,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "RegimeState":
+        return cls(
+            trend=TrendRegime(d.get("trend", "neutral")),
+            vol=VolRegime(d.get("vol", "normal_vol")),
+            mean_rev=MeanRevRegime(d.get("mean_rev", "random_walk")),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.trend.value}/{self.vol.value}/{self.mean_rev.value}"
+
+    def label(self) -> str:
+        return str(self)
+
+
+@dataclass
+class StreamingRegimeConfig:
+    """Configuration for StreamingRegimeDetector."""
+    fast_alpha: float = 0.1          # EW decay for fast stats
+    slow_alpha: float = 0.02         # EW decay for slow (baseline) stats
+    trend_sigma_threshold: float = 1.0  # sigmas above/below zero for BULL/BEAR
+    vol_high_quantile: float = 0.75  # quantile threshold for HIGH_VOL
+    vol_low_quantile: float = 0.25   # quantile threshold for LOW_VOL
+    hurst_lags: tuple = (2, 4, 8, 16)  # lags for variance-ratio Hurst estimate
+    hmm_smoothing: float = 0.3       # sticky-state weight (0 = no smoothing)
+    history_maxlen: int = 500        # max regime history records
+
+
+class StreamingRegimeDetector:
+    """Bar-by-bar O(1) regime classifier using exponentially-weighted stats.
+
+    Detects three independent regime axes:
+    - Trend: BULL / BEAR / NEUTRAL  (EW mean vs threshold)
+    - Volatility: HIGH / LOW / NORMAL  (EW std vs quantile buffer)
+    - Mean-reversion: TRENDING / MEAN_REVERTING / RANDOM_WALK (Hurst via variance ratio)
+    """
+
+    def __init__(self, config: StreamingRegimeConfig | None = None) -> None:
+        self.config = config or StreamingRegimeConfig()
+        # Exponentially-weighted moments
+        self._ew_mean: float = 0.0
+        self._ew_var: float = 0.0          # fast (for current vol)
+        self._ew_var_slow: float = 0.0     # slow (baseline)
+        self._n: int = 0
+        # Rolling buffers for variance-ratio Hurst
+        self._return_buffer: list = []
+        self._vol_buffer: list = []        # rolling realized vol samples
+        # Regime history
+        from collections import deque
+        self._history: deque = deque(maxlen=self.config.history_maxlen)
+        self._transition_counts: dict = {}
+        self._current: RegimeState = RegimeState()
+        import threading
+        self._lock = threading.RLock()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def update(
+        self,
+        returns: np.ndarray,        # (M,) cross-sectional returns at this bar
+        volumes: np.ndarray | None = None,  # (M,) optional — unused currently
+    ) -> RegimeState:
+        """Process one bar and return updated RegimeState."""
+        with self._lock:
+            r = float(np.nanmean(returns))
+            vol = float(np.nanstd(returns)) if len(returns) > 1 else 0.0
+            self._update_moments(r, vol)
+            new_state = self._classify()
+            self._apply_smoothing(new_state)
+            self._record_transition(self._current, new_state)
+            self._current = new_state
+            self._history.append(new_state)
+            return new_state
+
+    def get_current_regime(self) -> RegimeState:
+        with self._lock:
+            return self._current
+
+    def get_regime_history(self, lookback: int = 20) -> list:
+        with self._lock:
+            hist = list(self._history)
+            return hist[-lookback:] if lookback else hist
+
+    def regime_transition_probability(self) -> dict:
+        """Return dict of 'from/to' → empirical probability."""
+        with self._lock:
+            total = sum(self._transition_counts.values())
+            if total == 0:
+                return {}
+            return {k: v / total for k, v in self._transition_counts.items()}
+
+    def reset(self) -> None:
+        with self._lock:
+            self.__init__(config=self.config)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _update_moments(self, r: float, vol: float) -> None:
+        fa, sa = self.config.fast_alpha, self.config.slow_alpha
+        if self._n == 0:
+            self._ew_mean = r
+            self._ew_var = vol ** 2
+            self._ew_var_slow = vol ** 2
+        else:
+            self._ew_mean = fa * r + (1 - fa) * self._ew_mean
+            self._ew_var = fa * (r - self._ew_mean) ** 2 + (1 - fa) * self._ew_var
+            self._ew_var_slow = sa * vol ** 2 + (1 - sa) * self._ew_var_slow
+        self._n += 1
+        self._return_buffer.append(r)
+        self._vol_buffer.append(vol)
+        if len(self._return_buffer) > 200:
+            self._return_buffer.pop(0)
+            self._vol_buffer.pop(0)
+
+    def _classify(self) -> RegimeState:
+        return RegimeState(
+            trend=self._classify_trend(),
+            vol=self._classify_vol(),
+            mean_rev=self._classify_mean_rev(),
+        )
+
+    def _classify_trend(self) -> TrendRegime:
+        sigma = float(np.sqrt(max(self._ew_var, 1e-16)))
+        n = max(self._n, 1)
+        se = sigma / (n ** 0.5)
+        thresh = self.config.trend_sigma_threshold * se
+        if self._ew_mean > thresh:
+            return TrendRegime.BULL
+        elif self._ew_mean < -thresh:
+            return TrendRegime.BEAR
+        return TrendRegime.NEUTRAL
+
+    def _classify_vol(self) -> VolRegime:
+        if len(self._vol_buffer) < 10:
+            return VolRegime.NORMAL_VOL
+        arr = np.array(self._vol_buffer)
+        cur = float(np.sqrt(max(self._ew_var, 0.0)))
+        hi = float(np.quantile(arr, self.config.vol_high_quantile))
+        lo = float(np.quantile(arr, self.config.vol_low_quantile))
+        if cur > hi:
+            return VolRegime.HIGH_VOL
+        elif cur < lo:
+            return VolRegime.LOW_VOL
+        return VolRegime.NORMAL_VOL
+
+    def _classify_mean_rev(self) -> MeanRevRegime:
+        buf = self._return_buffer
+        if len(buf) < 32:
+            return MeanRevRegime.RANDOM_WALK
+        arr = np.array(buf)
+        lags = [l for l in self.config.hurst_lags if l < len(arr)]
+        if not lags:
+            return MeanRevRegime.RANDOM_WALK
+        ratios = []
+        for lag in lags:
+            var_lag = float(np.var(arr[lag:] - arr[:-lag]))
+            var_1 = float(np.var(np.diff(arr))) if len(arr) > 1 else 1e-16
+            if var_1 > 1e-16:
+                ratios.append(var_lag / (lag * var_1))
+        if not ratios:
+            return MeanRevRegime.RANDOM_WALK
+        hurst_proxy = float(np.mean(ratios))
+        if hurst_proxy > 1.1:
+            return MeanRevRegime.TRENDING
+        elif hurst_proxy < 0.9:
+            return MeanRevRegime.MEAN_REVERTING
+        return MeanRevRegime.RANDOM_WALK
+
+    def _apply_smoothing(self, new_state: RegimeState) -> None:
+        """HMM-inspired: resist single-bar flips via smoothing weight."""
+        w = self.config.hmm_smoothing
+        if w <= 0 or self._current is None:
+            return
+        # If smoothing weight is high and current state differs, revert in-place
+        # (simple sticky-state: only update if change is "strong enough")
+        # We achieve this by probabilistic rejection — deterministic version:
+        # keep current if random draw < smoothing weight (approximate)
+        import random
+        if (new_state.trend != self._current.trend or
+                new_state.vol != self._current.vol):
+            if random.random() < w:
+                new_state.trend = self._current.trend
+                new_state.vol = self._current.vol
+
+    def _record_transition(self, old: RegimeState, new: RegimeState) -> None:
+        key = f"{old.label()}->{new.label()}"
+        self._transition_counts[key] = self._transition_counts.get(key, 0) + 1

@@ -343,3 +343,140 @@ def evolve_memory(
         insights=merged_insights,
         version=memory.version + 1,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Online confidence decay helpers (added for HelixFactor)
+# ---------------------------------------------------------------------------
+
+def apply_confidence_decay(
+    memory: "ExperienceMemory",
+    decay_factor: float = 0.99,
+    min_confidence: float = 0.05,
+) -> "ExperienceMemory":
+    """Return new ExperienceMemory with decayed pattern confidences.
+
+    Seed patterns (occurrence_count == 0) are immune to decay.
+    Patterns below min_confidence are pruned.
+
+    Parameters
+    ----------
+    memory:
+        Input ExperienceMemory (not mutated — immutable-style).
+    decay_factor:
+        Multiplicative decay per call (e.g. 0.99 = 1% decay per iteration).
+    min_confidence:
+        Patterns with confidence < this threshold after decay are removed.
+
+    Returns
+    -------
+    ExperienceMemory
+        New instance with decayed/pruned patterns.
+    """
+    import dataclasses
+
+    new_patterns = []
+    for p in memory.success_patterns:
+        if p.occurrence_count == 0:
+            # seed pattern — never decay
+            new_patterns.append(p)
+            continue
+        new_conf = getattr(p, "confidence", 1.0) * decay_factor
+        if new_conf >= min_confidence:
+            try:
+                new_patterns.append(dataclasses.replace(p, confidence=new_conf))
+            except TypeError:
+                new_patterns.append(p)
+
+    return dataclasses.replace(memory, success_patterns=new_patterns)
+
+
+def bump_pattern_confidence(
+    memory: "ExperienceMemory",
+    keywords: list,
+    boost: float = 0.05,
+    max_confidence: float = 1.0,
+) -> "ExperienceMemory":
+    """Return new ExperienceMemory with confidence boosted for matching patterns.
+
+    Patterns whose description or template contain any of the keywords receive
+    a confidence boost.
+
+    Parameters
+    ----------
+    memory:
+        Input ExperienceMemory (not mutated).
+    keywords:
+        List of strings to match against pattern descriptions.
+    boost:
+        Additive confidence increase for matching patterns.
+    max_confidence:
+        Confidence cap.
+
+    Returns
+    -------
+    ExperienceMemory
+        New instance with boosted pattern confidences.
+    """
+    import dataclasses
+
+    new_patterns = []
+    for p in memory.success_patterns:
+        desc = (getattr(p, "description", "") or "").lower()
+        tmpl = (getattr(p, "template", "") or "").lower()
+        matched = any(kw.lower() in desc or kw.lower() in tmpl for kw in keywords)
+        if matched:
+            new_conf = min(getattr(p, "confidence", 1.0) + boost, max_confidence)
+            try:
+                new_patterns.append(dataclasses.replace(p, confidence=new_conf))
+            except TypeError:
+                new_patterns.append(p)
+        else:
+            new_patterns.append(p)
+
+    return dataclasses.replace(memory, success_patterns=new_patterns)
+
+
+def penalise_pattern_confidence(
+    memory: "ExperienceMemory",
+    keywords: list,
+    penalty: float = 0.15,
+    min_confidence: float = 0.05,
+) -> "ExperienceMemory":
+    """Return new ExperienceMemory with confidence penalised for matching patterns.
+
+    Parameters
+    ----------
+    memory:
+        Input ExperienceMemory (not mutated).
+    keywords:
+        List of strings to match against pattern descriptions.
+    penalty:
+        Multiplicative penalty factor (confidence *= (1 - penalty)).
+    min_confidence:
+        Patterns below this threshold after penalty are pruned.
+
+    Returns
+    -------
+    ExperienceMemory
+        New instance with penalised/pruned pattern confidences.
+    """
+    import dataclasses
+
+    new_patterns = []
+    for p in memory.success_patterns:
+        desc = (getattr(p, "description", "") or "").lower()
+        tmpl = (getattr(p, "template", "") or "").lower()
+        matched = any(kw.lower() in desc or kw.lower() in tmpl for kw in keywords)
+        if matched:
+            new_conf = getattr(p, "confidence", 1.0) * (1.0 - penalty)
+            if new_conf < min_confidence:
+                continue  # prune
+            try:
+                new_patterns.append(dataclasses.replace(p, confidence=new_conf))
+            except TypeError:
+                new_patterns.append(p)
+        else:
+            new_patterns.append(p)
+
+    return dataclasses.replace(memory, success_patterns=new_patterns)
