@@ -9,6 +9,7 @@ from factorminer.benchmark.runtime import (
     run_benchmark_suite,
     run_cost_pressure_benchmark,
     run_efficiency_benchmark,
+    run_runtime_mining_benchmark,
     run_table1_benchmark,
     select_frozen_top_k,
 )
@@ -22,14 +23,23 @@ from factorminer.benchmark.helix_benchmark import (
     OperatorSpeedResult,
     PipelineSpeedResult,
 )
-from factorminer.benchmark.ablation import (
-    AblationStudy,
-    AblationResult,
-    AblatedMethodRunner,
-    ABLATION_CONFIGS,
-    ABLATION_LABELS,
-    run_full_ablation_study,
-)
+
+try:  # pragma: no cover - optional in trimmed checkouts
+    from factorminer.benchmark.ablation import (
+        AblationStudy,
+        AblationResult,
+        AblatedMethodRunner,
+        ABLATION_CONFIGS,
+        ABLATION_LABELS,
+        run_full_ablation_study,
+    )
+except Exception:  # pragma: no cover - optional in trimmed checkouts
+    AblationStudy = None
+    AblationResult = None
+    AblatedMethodRunner = None
+    ABLATION_CONFIGS = None
+    ABLATION_LABELS = None
+    run_full_ablation_study = None
 
 __all__ = [
     # legacy runtime benchmark
@@ -41,6 +51,7 @@ __all__ = [
     "run_benchmark_suite",
     "run_cost_pressure_benchmark",
     "run_efficiency_benchmark",
+    "run_runtime_mining_benchmark",
     "run_table1_benchmark",
     "select_frozen_top_k",
     # helix benchmark

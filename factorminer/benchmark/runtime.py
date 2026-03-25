@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import copy
 import hashlib
 import json
 import logging
 import time
 from pathlib import Path
-from typing import Iterable, Optional
+from types import SimpleNamespace
+from typing import Any, Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,7 @@ from factorminer.benchmark.catalogs import (
 )
 from factorminer.core.factor_library import Factor, FactorLibrary
 from factorminer.core.library_io import load_library
+from factorminer.core.session import MiningSession
 from factorminer.evaluation.runtime import (
     EvaluationDataset,
     FactorEvaluationArtifact,
@@ -37,6 +39,16 @@ from factorminer.evaluation.runtime import (
 )
 
 logger = logging.getLogger(__name__)
+
+RUNTIME_LOOP_BASELINES = {
+    "ralph_loop",
+    "helix_phase2",
+    "helix_no_memory",
+    "helix_no_debate",
+    "helix_no_significance",
+    "helix_no_capacity",
+    "helix_no_regime",
+}
 
 
 @dataclass
@@ -58,7 +70,9 @@ class BenchmarkManifest:
     primary_objective: str
     dataset_hashes: dict[str, str]
     artifact_paths: dict[str, str]
-    warnings: list[str]
+    runtime_contract: dict[str, Any] = field(default_factory=dict)
+    baseline_provenance: dict[str, dict[str, Any]] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
 
 def _clone_cfg(cfg):
@@ -92,6 +106,548 @@ def _data_hash(df: pd.DataFrame) -> str:
     digest = hashlib.sha256()
     digest.update(pd.util.hash_pandas_object(sample, index=True).values.tobytes())
     return digest.hexdigest()
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively convert NaN/inf values into JSON-safe nulls."""
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    if isinstance(value, float):
+        if np.isnan(value) or np.isinf(value):
+            return None
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fp:
+        for chunk in iter(lambda: fp.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _json_summary(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        with open(path) as fp:
+            payload = json.load(fp)
+    except Exception as exc:  # pragma: no cover - defensive provenance capture
+        return {"path": str(path), "load_error": str(exc)}
+
+    if isinstance(payload, dict):
+        return payload
+    return {"path": str(path), "payload_type": type(payload).__name__}
+
+
+def _session_summary(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        return MiningSession.load(path).get_summary()
+    except Exception as exc:  # pragma: no cover - defensive provenance capture
+        return {"path": str(path), "load_error": str(exc)}
+
+
+def _catalog_provenance(baseline: str, candidate_count: int, seed: int) -> dict[str, Any]:
+    return {
+        "kind": "catalog",
+        "source": baseline,
+        "candidate_count": candidate_count,
+        "seed": seed,
+    }
+
+
+def _saved_library_provenance(
+    requested_path: str,
+    baseline: str,
+) -> dict[str, Any]:
+    base_path = Path(_base_path(requested_path)).expanduser()
+    resolved_base = base_path.resolve() if base_path.exists() else base_path
+    library_json = resolved_base.with_suffix(".json")
+    signal_cache = Path(str(resolved_base) + "_signals.npz")
+    parent = resolved_base.parent
+
+    source_files: dict[str, dict[str, str]] = {}
+    for label, path in {
+        "library_json": library_json,
+        "signal_cache": signal_cache,
+        "session_json": parent / "session.json",
+        "session_log_json": parent / "session_log.json",
+        "checkpoint_session_json": parent / "checkpoint" / "session.json",
+        "checkpoint_loop_state_json": parent / "checkpoint" / "loop_state.json",
+        "checkpoint_memory_json": parent / "checkpoint" / "memory.json",
+    }.items():
+        if path.exists():
+            source_files[label] = {
+                "path": str(path),
+                "sha256": _file_sha256(path),
+            }
+
+    provenance: dict[str, Any] = {
+        "kind": "saved_library",
+        "source": baseline,
+        "requested_path": str(Path(requested_path)),
+        "resolved_base_path": str(resolved_base),
+        "source_files": source_files,
+        "library_summary": {},
+        "session_summary": _session_summary(parent / "session.json"),
+        "session_log_summary": _json_summary(parent / "session_log.json"),
+    }
+
+    if library_json.exists():
+        try:
+            library = load_library(resolved_base)
+        except Exception as exc:  # pragma: no cover - defensive provenance capture
+            provenance["library_summary"] = {
+                "path": str(library_json),
+                "load_error": str(exc),
+            }
+        else:
+            provenance["library_summary"] = {
+                "path": str(library_json),
+                "factor_count": library.size,
+                "diagnostics": library.get_diagnostics(),
+            }
+
+    return provenance
+
+
+def _baseline_provenance(
+    baseline: str,
+    *,
+    factor_miner_library_path: Optional[str] = None,
+    factor_miner_no_memory_library_path: Optional[str] = None,
+    candidate_count: int = 0,
+    seed: int = 0,
+) -> dict[str, Any]:
+    if baseline == "factor_miner" and factor_miner_library_path:
+        return _saved_library_provenance(factor_miner_library_path, baseline)
+    if baseline == "factor_miner_no_memory" and factor_miner_no_memory_library_path:
+        return _saved_library_provenance(
+            factor_miner_no_memory_library_path,
+            baseline,
+        )
+    return _catalog_provenance(baseline, candidate_count, seed)
+
+
+def _runtime_manifest_value(
+    runtime_manifests: Optional[dict[str, dict[str, Any]]],
+    baseline: str,
+) -> dict[str, Any]:
+    """Return the runtime manifest for one baseline if supplied."""
+    if not runtime_manifests:
+        return {}
+    value = runtime_manifests.get(baseline, {})
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _build_runtime_provider(cfg, *, mock: bool):
+    """Create the benchmark-time LLM provider."""
+    from factorminer.agent.llm_interface import MockProvider, create_provider
+
+    if mock or getattr(cfg.llm, "provider", "mock") == "mock":
+        return MockProvider()
+
+    provider_cfg = {
+        "provider": cfg.llm.provider,
+        "model": cfg.llm.model,
+    }
+    raw_llm_cfg = getattr(cfg, "_raw", {}).get("llm", {})
+    if raw_llm_cfg.get("api_key"):
+        provider_cfg["api_key"] = raw_llm_cfg["api_key"]
+    return create_provider(provider_cfg)
+
+
+def _filter_dataclass_kwargs(source, target_cls):
+    """Copy shared dataclass fields from one config object to another."""
+    from dataclasses import fields
+
+    target_fields = {f.name for f in fields(target_cls)}
+    source_fields = getattr(source, "__dataclass_fields__", {})
+    return {
+        name: getattr(source, name)
+        for name in source_fields
+        if name in target_fields
+    }
+
+
+def _build_phase2_runtime_kwargs(cfg) -> dict[str, Any]:
+    """Build runtime Phase 2 configs from the hierarchical benchmark config."""
+    from factorminer.evaluation.causal import CausalConfig as RuntimeCausalConfig
+    from factorminer.evaluation.capacity import CapacityConfig as RuntimeCapacityConfig
+    from factorminer.evaluation.regime import RegimeConfig as RuntimeRegimeConfig
+    from factorminer.evaluation.significance import (
+        SignificanceConfig as RuntimeSignificanceConfig,
+    )
+    from factorminer.agent.debate import DebateConfig as RuntimeDebateConfig
+    from factorminer.agent.specialists import DEFAULT_SPECIALISTS
+
+    debate_config = None
+    if cfg.phase2.debate.enabled:
+        requested = cfg.phase2.debate.num_specialists
+        selected = list(DEFAULT_SPECIALISTS[:requested])
+        if requested > len(DEFAULT_SPECIALISTS):
+            selected = list(DEFAULT_SPECIALISTS)
+        debate_config = RuntimeDebateConfig(
+            specialists=selected,
+            enable_critic=cfg.phase2.debate.enable_critic,
+            candidates_per_specialist=cfg.phase2.debate.candidates_per_specialist,
+            top_k_after_critic=cfg.phase2.debate.top_k_after_critic,
+            critic_temperature=cfg.phase2.debate.critic_temperature,
+        )
+
+    causal_config = None
+    if cfg.phase2.causal.enabled:
+        causal_config = RuntimeCausalConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.causal, RuntimeCausalConfig)
+        )
+
+    regime_config = None
+    if cfg.phase2.regime.enabled:
+        regime_config = RuntimeRegimeConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.regime, RuntimeRegimeConfig)
+        )
+
+    capacity_config = None
+    if cfg.phase2.capacity.enabled:
+        capacity_config = RuntimeCapacityConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.capacity, RuntimeCapacityConfig)
+        )
+
+    significance_config = None
+    if cfg.phase2.significance.enabled:
+        significance_config = RuntimeSignificanceConfig(
+            **_filter_dataclass_kwargs(cfg.phase2.significance, RuntimeSignificanceConfig)
+        )
+
+    return {
+        "debate_config": debate_config,
+        "causal_config": causal_config,
+        "regime_config": regime_config,
+        "capacity_config": capacity_config,
+        "significance_config": significance_config,
+        "enable_knowledge_graph": bool(cfg.phase2.helix.enable_knowledge_graph),
+        "enable_embeddings": bool(cfg.phase2.helix.enable_embeddings),
+        "enable_auto_inventor": bool(cfg.phase2.auto_inventor.enabled),
+        "auto_invention_interval": int(cfg.phase2.auto_inventor.invention_interval),
+        "canonicalize": bool(cfg.phase2.helix.enable_canonicalization),
+        "forgetting_lambda": float(cfg.phase2.helix.forgetting_lambda),
+    }
+
+
+def _extract_volume_panel(dataset: EvaluationDataset) -> Optional[np.ndarray]:
+    """Best-effort extraction of a dollar-volume panel for Helix capacity checks."""
+    for key in ("$amt", "$volume"):
+        panel = dataset.data_dict.get(key)
+        if panel is not None and np.any(np.isfinite(panel)):
+            return np.asarray(panel, dtype=np.float64)
+    return None
+
+
+def _build_runtime_loop_config(
+    cfg,
+    *,
+    output_dir: Path,
+    dataset: EvaluationDataset,
+    mock: bool,
+    runtime_manifest: dict[str, Any],
+):
+    """Build the flat loop config consumed by RalphLoop/HelixLoop."""
+    from factorminer.core.config import MiningConfig as LoopMiningConfig
+
+    target_library_size = int(
+        runtime_manifest.get(
+            "target_library_size",
+            getattr(cfg.mining, "target_library_size", 110),
+        )
+    )
+    max_iterations = int(
+        runtime_manifest.get(
+            "max_iterations",
+            getattr(cfg.mining, "max_iterations", 200),
+        )
+    )
+    ic_threshold = float(
+        runtime_manifest.get(
+            "ic_threshold",
+            getattr(cfg.mining, "ic_threshold", 0.04),
+        )
+    )
+    icir_threshold = float(
+        runtime_manifest.get(
+            "icir_threshold",
+            getattr(cfg.mining, "icir_threshold", 0.5),
+        )
+    )
+    correlation_threshold = float(
+        runtime_manifest.get(
+            "correlation_threshold",
+            getattr(cfg.mining, "correlation_threshold", 0.5),
+        )
+    )
+    replacement_ic_min = float(
+        runtime_manifest.get(
+            "replacement_ic_min",
+            getattr(cfg.mining, "replacement_ic_min", 0.10),
+        )
+    )
+    replacement_ic_ratio = float(
+        runtime_manifest.get(
+            "replacement_ic_ratio",
+            getattr(cfg.mining, "replacement_ic_ratio", 1.3),
+        )
+    )
+
+    if runtime_manifest.get("relax_thresholds", mock):
+        ic_threshold = min(ic_threshold, 0.0)
+        icir_threshold = min(icir_threshold, -1.0)
+        correlation_threshold = max(correlation_threshold, 1.1)
+
+    loop_cfg = LoopMiningConfig(
+        target_library_size=target_library_size,
+        batch_size=int(
+            runtime_manifest.get("batch_size", getattr(cfg.mining, "batch_size", 40))
+        ),
+        max_iterations=max_iterations,
+        ic_threshold=ic_threshold,
+        icir_threshold=icir_threshold,
+        correlation_threshold=correlation_threshold,
+        replacement_ic_min=replacement_ic_min,
+        replacement_ic_ratio=replacement_ic_ratio,
+        fast_screen_assets=int(
+            runtime_manifest.get(
+                "fast_screen_assets",
+                getattr(cfg.evaluation, "fast_screen_assets", 100),
+            )
+        ),
+        num_workers=int(
+            runtime_manifest.get(
+                "num_workers", getattr(cfg.evaluation, "num_workers", 1)
+            )
+        ),
+        output_dir=str(output_dir),
+        backend=str(
+            runtime_manifest.get(
+                "backend", getattr(cfg.evaluation, "backend", "numpy")
+            )
+        ),
+        gpu_device=str(
+            runtime_manifest.get(
+                "gpu_device", getattr(cfg.evaluation, "gpu_device", "cuda:0")
+            )
+        ),
+        signal_failure_policy=str(
+            runtime_manifest.get(
+                "signal_failure_policy",
+                "synthetic" if mock else getattr(cfg.evaluation, "signal_failure_policy", "reject"),
+            )
+        ),
+    )
+
+    loop_cfg.research = cfg.research
+    loop_cfg.benchmark_mode = str(getattr(cfg.benchmark, "mode", "paper"))
+    loop_cfg.target_panels = dataset.target_panels
+    loop_cfg.target_horizons = {
+        name: max(int(spec.holding_bars), 1)
+        for name, spec in dataset.target_specs.items()
+    }
+    return loop_cfg
+
+
+def _cfg_for_runtime_baseline(cfg, baseline: str):
+    """Project the hierarchical config into one runtime benchmark variant."""
+    runtime_cfg = _clone_cfg(cfg)
+
+    # Start from a clean phase-2 surface so variants are explicit.
+    runtime_cfg.phase2.causal.enabled = False
+    runtime_cfg.phase2.regime.enabled = False
+    runtime_cfg.phase2.capacity.enabled = False
+    runtime_cfg.phase2.significance.enabled = False
+    runtime_cfg.phase2.debate.enabled = False
+    runtime_cfg.phase2.auto_inventor.enabled = False
+    runtime_cfg.phase2.helix.enabled = False
+    runtime_cfg.phase2.helix.enable_knowledge_graph = False
+    runtime_cfg.phase2.helix.enable_embeddings = False
+    runtime_cfg.phase2.helix.enable_canonicalization = False
+
+    if baseline in {"ralph_loop", "factor_miner", "factor_miner_no_memory"}:
+        runtime_cfg.benchmark.mode = "paper"
+        return runtime_cfg
+
+    runtime_cfg.benchmark.mode = "research"
+    runtime_cfg.phase2.helix.enabled = True
+    runtime_cfg.phase2.helix.enable_canonicalization = True
+    runtime_cfg.phase2.helix.enable_knowledge_graph = True
+    runtime_cfg.phase2.helix.enable_embeddings = True
+    runtime_cfg.phase2.debate.enabled = True
+    runtime_cfg.phase2.regime.enabled = True
+    runtime_cfg.phase2.capacity.enabled = True
+    runtime_cfg.phase2.significance.enabled = True
+
+    if baseline == "helix_no_memory":
+        runtime_cfg.phase2.helix.enable_knowledge_graph = False
+        runtime_cfg.phase2.helix.enable_embeddings = False
+    elif baseline == "helix_no_debate":
+        runtime_cfg.phase2.debate.enabled = False
+    elif baseline == "helix_no_significance":
+        runtime_cfg.phase2.significance.enabled = False
+    elif baseline == "helix_no_capacity":
+        runtime_cfg.phase2.capacity.enabled = False
+    elif baseline == "helix_no_regime":
+        runtime_cfg.phase2.regime.enabled = False
+
+    return runtime_cfg
+
+
+def _real_mining_loop_type(baseline: str, runtime_manifest: dict[str, Any]) -> str:
+    """Resolve the loop type for a runtime mining request."""
+    loop_type = str(runtime_manifest.get("loop_type", "")).strip().lower()
+    if loop_type in {"ralph", "helix"}:
+        return loop_type
+    if baseline in {"helix_phase2", "helix_no_memory", "helix_no_debate", "helix_no_significance", "helix_no_capacity", "helix_no_regime"}:
+        return "helix"
+    if baseline in {"factor_miner", "factor_miner_no_memory", "ralph_loop"}:
+        return "ralph"
+    return "ralph"
+
+
+def _runtime_loop_provenance(
+    *,
+    baseline: str,
+    loop_type: str,
+    runtime_manifest: dict[str, Any],
+    runtime_output_dir: Path,
+) -> dict[str, Any]:
+    """Summarize the real mining run used to source benchmark factors."""
+    library_json = runtime_output_dir / "factor_library.json"
+    run_manifest = runtime_output_dir / "run_manifest.json"
+    session_json = runtime_output_dir / "session.json"
+    session_log_json = runtime_output_dir / "session_log.json"
+    checkpoint_dir = runtime_output_dir / "checkpoint"
+
+    source_files: dict[str, dict[str, str]] = {}
+    for label, path in {
+        "library_json": library_json,
+        "run_manifest_json": run_manifest,
+        "session_json": session_json,
+        "session_log_json": session_log_json,
+        "checkpoint_library_json": checkpoint_dir / "library.json",
+        "checkpoint_run_manifest_json": checkpoint_dir / "run_manifest.json",
+        "checkpoint_session_json": checkpoint_dir / "session.json",
+        "checkpoint_loop_state_json": checkpoint_dir / "loop_state.json",
+    }.items():
+        if path.exists():
+            source_files[label] = {
+                "path": str(path),
+                "sha256": _file_sha256(path),
+            }
+
+    provenance: dict[str, Any] = {
+        "kind": "runtime_loop",
+        "source": baseline,
+        "loop_type": loop_type,
+        "requested_runtime_manifest": _json_safe(runtime_manifest),
+        "runtime_output_dir": str(runtime_output_dir),
+        "source_files": source_files,
+        "run_manifest_summary": _json_summary(run_manifest),
+        "session_summary": _session_summary(session_json),
+        "session_log_summary": _json_summary(session_log_json),
+        "library_summary": {},
+    }
+
+    if library_json.exists():
+        try:
+            library = load_library(runtime_output_dir / "factor_library")
+        except Exception as exc:  # pragma: no cover - defensive provenance capture
+            provenance["library_summary"] = {
+                "path": str(library_json),
+                "load_error": str(exc),
+            }
+        else:
+            provenance["library_summary"] = {
+                "path": str(library_json),
+                "factor_count": library.size,
+                "diagnostics": library.get_diagnostics(),
+            }
+
+    return provenance
+
+
+def _run_runtime_mining_loop(
+    cfg,
+    *,
+    baseline: str,
+    dataset: EvaluationDataset,
+    output_dir: Path,
+    runtime_manifest: Optional[dict[str, Any]] = None,
+    mock: bool = False,
+) -> dict[str, Any]:
+    """Run a real RalphLoop/HelixLoop and return its factor library."""
+    runtime_manifest = dict(runtime_manifest or {})
+    loop_type = _real_mining_loop_type(baseline, runtime_manifest)
+    runtime_output_dir = _ensure_dir(output_dir / "benchmark" / "table1" / baseline / "runtime")
+    runtime_cfg = _cfg_for_runtime_baseline(cfg, baseline)
+    loop_cfg = _build_runtime_loop_config(
+        runtime_cfg,
+        output_dir=runtime_output_dir,
+        dataset=dataset,
+        mock=mock or bool(runtime_manifest.get("mock", False)),
+        runtime_manifest=runtime_manifest,
+    )
+    provider = _build_runtime_provider(runtime_cfg, mock=mock or bool(runtime_manifest.get("mock", False)))
+
+    if loop_type == "helix":
+        from factorminer.core.helix_loop import HelixLoop
+
+        phase2_kwargs = _build_phase2_runtime_kwargs(runtime_cfg)
+        loop = HelixLoop(
+            config=loop_cfg,
+            data_tensor=dataset.data_tensor,
+            returns=dataset.returns,
+            llm_provider=provider,
+            volume=_extract_volume_panel(dataset),
+            **phase2_kwargs,
+        )
+    else:
+        from factorminer.core.ralph_loop import RalphLoop
+
+        loop = RalphLoop(
+            config=loop_cfg,
+            data_tensor=dataset.data_tensor,
+            returns=dataset.returns,
+            llm_provider=provider,
+        )
+
+    checkpoint_interval = int(runtime_manifest.get("checkpoint_interval", 0 if mock else 1))
+    loop.checkpoint_interval = checkpoint_interval
+
+    if runtime_manifest.get("checkpoint_path"):
+        loop.load_session(str(runtime_manifest["checkpoint_path"]))
+
+    target_size = int(runtime_manifest.get("target_library_size", loop_cfg.target_library_size))
+    max_iterations = int(runtime_manifest.get("max_iterations", loop_cfg.max_iterations))
+    library = loop.run(target_size=target_size, max_iterations=max_iterations)
+    provenance = _runtime_loop_provenance(
+        baseline=baseline,
+        loop_type=loop_type,
+        runtime_manifest={**runtime_manifest, "target_library_size": target_size, "max_iterations": max_iterations},
+        runtime_output_dir=runtime_output_dir,
+    )
+    return {
+        "baseline": baseline,
+        "loop_type": loop_type,
+        "library": library,
+        "provenance": provenance,
+        "runtime_output_dir": str(runtime_output_dir),
+        "target_library_size": target_size,
+        "max_iterations": max_iterations,
+    }
 
 
 def load_benchmark_dataset(
@@ -427,6 +983,12 @@ def evaluate_frozen_set(
     for name, composite in combos.items():
         stats = backtester.quintile_backtest(composite, eval_returns)
         result["combinations"][name] = _normalize_backtest_stats(stats)
+        result["combinations"][name]["ic_series"] = _json_safe(
+            np.asarray(stats.get("ic_series", []), dtype=np.float64).tolist()
+        )
+        result["combinations"][name]["turnover_series"] = _json_safe(
+            np.asarray(stats.get("turnover_series", []), dtype=np.float64).tolist()
+        )
         result["combinations"][name]["cost_pressure"] = {
             str(cost): _normalize_backtest_stats(
                 backtester.quintile_backtest(
@@ -475,6 +1037,12 @@ def evaluate_frozen_set(
         result["selections"][name] = {
             "factor_count": len(selected_ids),
             **_normalize_backtest_stats(stats),
+            "ic_series": _json_safe(
+                np.asarray(stats.get("ic_series", []), dtype=np.float64).tolist()
+            ),
+            "turnover_series": _json_safe(
+                np.asarray(stats.get("turnover_series", []), dtype=np.float64).tolist()
+            ),
         }
 
     return result
@@ -488,7 +1056,7 @@ def _ensure_dir(path: Path) -> Path:
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as fp:
-        json.dump(payload, fp, indent=2, sort_keys=False)
+        json.dump(_json_safe(payload), fp, indent=2, sort_keys=False, allow_nan=False)
 
 
 def _save_manifest(path: Path, manifest: BenchmarkManifest) -> None:
@@ -500,31 +1068,70 @@ def run_table1_benchmark(
     output_dir: Path,
     *,
     data_path: Optional[str] = None,
+    raw_df: Optional[pd.DataFrame] = None,
     mock: bool = False,
     baseline_names: Optional[list[str]] = None,
     factor_miner_library_path: Optional[str] = None,
     factor_miner_no_memory_library_path: Optional[str] = None,
+    runtime_manifests: Optional[dict[str, dict[str, Any]]] = None,
+    use_runtime_loops: bool = False,
 ) -> dict:
     """Run the strict Top-K freeze benchmark across all configured universes."""
+    if runtime_manifests is None:
+        runtime_manifests = getattr(cfg.benchmark, "runtime_manifests", None)
+    use_runtime_loops = bool(
+        use_runtime_loops
+        or getattr(cfg.benchmark, "runtime_loops", False)
+        or runtime_manifests
+    )
     benchmark_dir = _ensure_dir(output_dir / "benchmark" / "table1")
     baseline_names = baseline_names or list(cfg.benchmark.baselines)
     freeze_cfg = _cfg_with_overrides(cfg, cfg.benchmark.freeze_universe)
     freeze_dataset, freeze_hash = load_benchmark_dataset(
         freeze_cfg,
         data_path=data_path,
+        raw_df=raw_df,
         universe=cfg.benchmark.freeze_universe,
         mock=mock,
     )
 
     summary: dict[str, dict] = {}
     for baseline in baseline_names:
-        entries = _get_baseline_entries(
-            baseline,
-            cfg.benchmark.seed,
-            factor_miner_library_path=factor_miner_library_path,
-            factor_miner_no_memory_library_path=factor_miner_no_memory_library_path,
+        runtime_manifest = _runtime_manifest_value(runtime_manifests, baseline)
+        runtime_baseline = bool(runtime_manifest) or (
+            use_runtime_loops
+            and baseline in (RUNTIME_LOOP_BASELINES | {"factor_miner", "factor_miner_no_memory"})
         )
-        factors = _factors_from_entries(entries)
+
+        if runtime_baseline:
+            runtime_result = _run_runtime_mining_loop(
+                cfg,
+                baseline=baseline,
+                dataset=freeze_dataset,
+                output_dir=output_dir,
+                runtime_manifest=runtime_manifest,
+                mock=mock,
+            )
+            factors = list(runtime_result["library"].list_factors())
+            provenance = runtime_result["provenance"]
+            candidate_count = len(factors)
+        else:
+            entries = _get_baseline_entries(
+                baseline,
+                cfg.benchmark.seed,
+                factor_miner_library_path=factor_miner_library_path,
+                factor_miner_no_memory_library_path=factor_miner_no_memory_library_path,
+            )
+            factors = _factors_from_entries(entries)
+            provenance = _baseline_provenance(
+                baseline,
+                factor_miner_library_path=factor_miner_library_path,
+                factor_miner_no_memory_library_path=factor_miner_no_memory_library_path,
+                candidate_count=len(entries),
+                seed=cfg.benchmark.seed,
+            )
+            candidate_count = len(entries)
+
         artifacts = evaluate_factors(
             factors,
             freeze_dataset,
@@ -553,7 +1160,7 @@ def run_table1_benchmark(
             "baseline": baseline,
             "mode": cfg.benchmark.mode,
             "freeze_universe": cfg.benchmark.freeze_universe,
-            "candidate_count": len(entries),
+            "candidate_count": candidate_count,
             "freeze_library_size": library.size,
             "freeze_stats": library_stats,
             "frozen_top_k": [
@@ -575,6 +1182,7 @@ def run_table1_benchmark(
             dataset, dataset_hash = load_benchmark_dataset(
                 universe_cfg,
                 data_path=data_path,
+                raw_df=raw_df,
                 universe=universe,
                 mock=mock,
             )
@@ -588,6 +1196,8 @@ def run_table1_benchmark(
             )
 
         result_path = benchmark_dir / f"{baseline}.json"
+        manifest_path = benchmark_dir / f"{baseline}_manifest.json"
+        baseline_result["provenance"] = provenance
         _write_json(result_path, baseline_result)
         manifest = BenchmarkManifest(
             benchmark_name="table1",
@@ -604,10 +1214,15 @@ def run_table1_benchmark(
             target_stack=[target.get("name", "") for target in cfg.data.targets],
             primary_objective=cfg.research.primary_objective,
             dataset_hashes=dataset_hashes,
-            artifact_paths={"result": str(result_path)},
+            artifact_paths={
+                "result": str(result_path),
+                "manifest": str(manifest_path),
+            },
+            runtime_contract=runtime_manifest,
+            baseline_provenance={baseline: provenance},
             warnings=[],
         )
-        _save_manifest(benchmark_dir / f"{baseline}_manifest.json", manifest)
+        _save_manifest(manifest_path, manifest)
         summary[baseline] = baseline_result
 
     return summary
@@ -618,19 +1233,27 @@ def run_ablation_memory_benchmark(
     output_dir: Path,
     *,
     data_path: Optional[str] = None,
+    raw_df: Optional[pd.DataFrame] = None,
     mock: bool = False,
     factor_miner_library_path: Optional[str] = None,
     factor_miner_no_memory_library_path: Optional[str] = None,
+    runtime_manifests: Optional[dict[str, dict[str, Any]]] = None,
 ) -> dict:
     """Compare the default FactorMiner lane to the relaxed no-memory lane."""
+    use_runtime_loops = bool(
+        runtime_manifests or getattr(cfg.benchmark, "runtime_loops", False)
+    )
     comparison = run_table1_benchmark(
         cfg,
         output_dir,
         data_path=data_path,
+        raw_df=raw_df,
         mock=mock,
         baseline_names=["factor_miner", "factor_miner_no_memory"],
         factor_miner_library_path=factor_miner_library_path,
         factor_miner_no_memory_library_path=factor_miner_no_memory_library_path,
+        runtime_manifests=runtime_manifests,
+        use_runtime_loops=use_runtime_loops,
     )
     result = {}
     for baseline, payload in comparison.items():
@@ -653,17 +1276,25 @@ def run_cost_pressure_benchmark(
     *,
     baseline: str = "factor_miner",
     data_path: Optional[str] = None,
+    raw_df: Optional[pd.DataFrame] = None,
     mock: bool = False,
     factor_miner_library_path: Optional[str] = None,
+    runtime_manifests: Optional[dict[str, dict[str, Any]]] = None,
 ) -> dict:
     """Run cost-pressure analysis for one baseline on the configured universes."""
+    use_runtime_loops = bool(
+        runtime_manifests or getattr(cfg.benchmark, "runtime_loops", False)
+    )
     payload = run_table1_benchmark(
         cfg,
         output_dir,
         data_path=data_path,
+        raw_df=raw_df,
         mock=mock,
         baseline_names=[baseline],
         factor_miner_library_path=factor_miner_library_path,
+        runtime_manifests=runtime_manifests,
+        use_runtime_loops=use_runtime_loops,
     )[baseline]
     result = {
         universe: {
@@ -794,36 +1425,74 @@ def run_benchmark_suite(
     output_dir: Path,
     *,
     data_path: Optional[str] = None,
+    raw_df: Optional[pd.DataFrame] = None,
     mock: bool = False,
     factor_miner_library_path: Optional[str] = None,
     factor_miner_no_memory_library_path: Optional[str] = None,
+    runtime_manifests: Optional[dict[str, dict[str, Any]]] = None,
 ) -> dict:
     """Run the benchmark suite and return the artifact index."""
+    if runtime_manifests is None:
+        runtime_manifests = getattr(cfg.benchmark, "runtime_manifests", None)
+    use_runtime_loops = bool(
+        runtime_manifests or getattr(cfg.benchmark, "runtime_loops", False)
+    )
     results = {
         "table1": run_table1_benchmark(
             cfg,
             output_dir,
             data_path=data_path,
+            raw_df=raw_df,
             mock=mock,
             factor_miner_library_path=factor_miner_library_path,
             factor_miner_no_memory_library_path=factor_miner_no_memory_library_path,
+            runtime_manifests=runtime_manifests,
+            use_runtime_loops=use_runtime_loops,
         ),
         "ablation_memory": run_ablation_memory_benchmark(
             cfg,
             output_dir,
             data_path=data_path,
+            raw_df=raw_df,
             mock=mock,
             factor_miner_library_path=factor_miner_library_path,
             factor_miner_no_memory_library_path=factor_miner_no_memory_library_path,
+            runtime_manifests=runtime_manifests,
         ),
         "cost_pressure": run_cost_pressure_benchmark(
             cfg,
             output_dir,
             data_path=data_path,
+            raw_df=raw_df,
             mock=mock,
             factor_miner_library_path=factor_miner_library_path,
+            runtime_manifests=runtime_manifests,
         ),
         "efficiency": run_efficiency_benchmark(cfg, output_dir),
     }
     _write_json(_ensure_dir(output_dir / "benchmark") / "suite.json", results)
     return results
+
+
+def run_runtime_mining_benchmark(
+    cfg,
+    output_dir: Path,
+    *,
+    data_path: Optional[str] = None,
+    raw_df: Optional[pd.DataFrame] = None,
+    mock: bool = False,
+    factor_miner_library_path: Optional[str] = None,
+    factor_miner_no_memory_library_path: Optional[str] = None,
+    runtime_manifests: Optional[dict[str, dict[str, Any]]] = None,
+) -> dict:
+    """Run the benchmark suite with explicit real-loop manifests when provided."""
+    return run_benchmark_suite(
+        cfg,
+        output_dir,
+        data_path=data_path,
+        raw_df=raw_df,
+        mock=mock,
+        factor_miner_library_path=factor_miner_library_path,
+        factor_miner_no_memory_library_path=factor_miner_no_memory_library_path,
+        runtime_manifests=runtime_manifests,
+    )

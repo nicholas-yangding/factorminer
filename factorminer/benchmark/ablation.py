@@ -1,40 +1,59 @@
-"""Ablation study framework for HelixFactor Phase 2 components.
+"""Runtime ablation study for HelixFactor Phase 2 components.
 
-Tests HelixFactor with each component ablated one at a time to measure
-each component's individual contribution to the overall IC and ICIR.
+This module now drives ablations through the real loop path:
+- HelixLoop execution on a training slice
+- runtime recomputation of the admitted library
+- freeze/top-k selection and combo evaluation on a held-out slice
+- optional memory suppression via temporary monkeypatching
 
-Ablation configurations:
-  full             — all components enabled
-  no_debate        — single LLM generation (no specialists)
-  no_causal        — skip causal validation
-  no_canonicalize  — skip SymPy deduplication
-  no_regime        — regime-blind evaluation
-  no_online_memory — offline batch-only memory update
-  no_capacity      — skip capacity estimation
-  no_significance  — skip FDR/bootstrap filtering
-  no_memory        — no experience memory at all (≈ FactorMiner ablation)
+Supported ablations:
+  full             - all components enabled
+  no_debate        - disable specialist debate
+  no_causal        - disable causal validation
+  no_canonicalize  - disable SymPy deduplication
+  no_regime        - disable regime-aware evaluation
+  no_online_memory - disable memory retrieval / formation / evolution hooks
+  no_capacity      - disable capacity estimation
+  no_significance  - disable significance filtering
+  no_memory        - disable memory-guided generation and updates
 """
 
 from __future__ import annotations
 
 import logging
+import tempfile
 import time
-from dataclasses import dataclass, field
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-from factorminer.benchmark.helix_benchmark import (
-    HelixBenchmark,
-    MethodResult,
-    AblationResult,
-    _build_mock_data_dict,
-    _slice_data,
-    _build_library_df,
-    _build_combination_df,
-    _build_selection_df,
+import factorminer.core.helix_loop as helix_loop_module
+import factorminer.core.ralph_loop as ralph_loop_module
+from factorminer.agent.debate import DebateConfig as RuntimeDebateConfig
+from factorminer.agent.llm_interface import MockProvider
+from factorminer.benchmark.helix_benchmark import AblationResult, MethodResult
+from factorminer.core.config import MiningConfig
+from factorminer.core.helix_loop import HelixLoop
+from factorminer.core.factor_library import FactorLibrary
+from factorminer.evaluation.capacity import CapacityConfig as RuntimeCapacityConfig
+from factorminer.evaluation.causal import CausalConfig as RuntimeCausalConfig
+from factorminer.evaluation.regime import RegimeConfig as RuntimeRegimeConfig
+from factorminer.evaluation.runtime import (
+    DatasetSplit,
+    EvaluationDataset,
+    evaluate_factors,
 )
+from factorminer.evaluation.significance import (
+    SignificanceConfig as RuntimeSignificanceConfig,
+)
+from factorminer.benchmark.runtime import (
+    build_benchmark_library,
+    evaluate_frozen_set,
+    select_frozen_top_k,
+)
+from factorminer.memory.memory_store import ExperienceMemory
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +85,6 @@ ABLATION_CONFIGS: Dict[str, Dict[str, bool]] = {
     "no_memory": {**_FULL_CFG, "memory": False, "debate": False},
 }
 
-# Human-readable labels
 ABLATION_LABELS: Dict[str, str] = {
     "full": "HelixFactor (Full)",
     "no_debate": "w/o Debate",
@@ -79,7 +97,6 @@ ABLATION_LABELS: Dict[str, str] = {
     "no_memory": "w/o Memory (≈ FactorMiner NM)",
 }
 
-# Expected contribution direction (+1 = component helps, -1 = component hurts)
 EXPECTED_CONTRIBUTION_SIGN: Dict[str, int] = {
     "debate": +1,
     "causal": +1,
@@ -91,18 +108,349 @@ EXPECTED_CONTRIBUTION_SIGN: Dict[str, int] = {
     "memory": +1,
 }
 
+_FEATURE_KEYS = [
+    "$open",
+    "$high",
+    "$low",
+    "$close",
+    "$volume",
+    "$amt",
+    "$vwap",
+    "$returns",
+]
 
-# ---------------------------------------------------------------------------
-# AblatedMethodRunner
-# ---------------------------------------------------------------------------
+
+def _merge_slices(train_data: dict, test_data: dict) -> dict:
+    """Concatenate train/test slices into one runtime evaluation dictionary."""
+    merged: dict[str, np.ndarray] = {}
+    for key in sorted(set(train_data) | set(test_data)):
+        if key not in train_data or key not in test_data:
+            continue
+        left = np.asarray(train_data[key], dtype=np.float64)
+        right = np.asarray(test_data[key], dtype=np.float64)
+        if left.ndim == 2 and right.ndim == 2 and left.shape[0] == right.shape[0]:
+            merged[key] = np.concatenate([left, right], axis=1)
+        else:
+            merged[key] = np.asarray(left)
+    return merged
+
+
+def _slice_data(data: dict, start: int, end: int) -> dict:
+    """Slice all 2-D benchmark arrays to a column range."""
+    return {
+        key: value[:, start:end]
+        for key, value in data.items()
+        if isinstance(value, np.ndarray) and value.ndim >= 2
+    }
+
+
+def _build_runtime_dataset(data: dict) -> EvaluationDataset:
+    """Build a minimal runtime dataset from the benchmark dictionary format."""
+    feature_keys = [key for key in _FEATURE_KEYS if key in data]
+    if "forward_returns" not in data:
+        raise ValueError("Runtime ablation requires 'forward_returns' in the data dict")
+    if not feature_keys:
+        raise ValueError("Runtime ablation requires at least one market feature array")
+
+    arrays = [np.asarray(data[key], dtype=np.float64) for key in feature_keys]
+    data_tensor = np.stack(arrays, axis=2)
+    returns = np.asarray(data["forward_returns"], dtype=np.float64)
+    timestamps = np.arange(returns.shape[1])
+    asset_ids = np.arange(returns.shape[0])
+    full_split = DatasetSplit(
+        name="full",
+        indices=np.arange(returns.shape[1]),
+        timestamps=timestamps,
+        returns=returns,
+        target_returns={"target": returns},
+        default_target="target",
+    )
+
+    # The caller populates train/test splits by passing a merged train+test view.
+    return EvaluationDataset(
+        data_dict={key: np.asarray(data[key], dtype=np.float64) for key in feature_keys},
+        data_tensor=data_tensor,
+        returns=returns,
+        timestamps=timestamps,
+        asset_ids=asset_ids,
+        splits={"full": full_split},
+        processed_df=pd.DataFrame(),
+        target_panels={"target": returns},
+        default_target="target",
+    )
+
+
+def _build_split_dataset(data: dict, split_name: str) -> EvaluationDataset:
+    """Create a single-split runtime dataset from one benchmark slice."""
+    dataset = _build_runtime_dataset(data)
+    split = DatasetSplit(
+        name=split_name,
+        indices=np.arange(dataset.returns.shape[1]),
+        timestamps=dataset.timestamps,
+        returns=dataset.returns,
+        target_returns={"target": dataset.returns},
+        default_target="target",
+    )
+    dataset.splits = {split_name: split}
+    return dataset
+
+
+def _build_combined_dataset(train_data: dict, test_data: dict) -> EvaluationDataset:
+    """Create a train/test runtime dataset from sliced benchmark inputs."""
+    merged = _merge_slices(train_data, test_data)
+    dataset = _build_runtime_dataset(merged)
+    train_len = np.asarray(train_data["forward_returns"]).shape[1]
+    test_len = np.asarray(test_data["forward_returns"]).shape[1]
+    timestamps = np.arange(train_len + test_len)
+    returns = np.asarray(merged["forward_returns"], dtype=np.float64)
+
+    dataset.timestamps = timestamps
+    dataset.returns = returns
+    dataset.target_panels = {"target": returns}
+    dataset.default_target = "target"
+    dataset.splits = {
+        "train": DatasetSplit(
+            name="train",
+            indices=np.arange(0, train_len),
+            timestamps=timestamps[:train_len],
+            returns=returns[:, :train_len],
+            target_returns={"target": returns[:, :train_len]},
+            default_target="target",
+        ),
+        "test": DatasetSplit(
+            name="test",
+            indices=np.arange(train_len, train_len + test_len),
+            timestamps=timestamps[train_len:],
+            returns=returns[:, train_len:],
+            target_returns={"target": returns[:, train_len:]},
+            default_target="target",
+        ),
+        "full": DatasetSplit(
+            name="full",
+            indices=np.arange(train_len + test_len),
+            timestamps=timestamps,
+            returns=returns,
+            target_returns={"target": returns},
+            default_target="target",
+        ),
+    }
+    return dataset
+
+
+def _build_mining_config(
+    *,
+    output_dir: str,
+    target_library_size: int,
+    batch_size: int,
+    max_iterations: int,
+    ic_threshold: float,
+    correlation_threshold: float,
+) -> MiningConfig:
+    """Create a loop config tailored for a single runtime ablation."""
+    cfg = MiningConfig(
+        target_library_size=target_library_size,
+        batch_size=batch_size,
+        max_iterations=max_iterations,
+        ic_threshold=ic_threshold,
+        icir_threshold=0.5,
+        correlation_threshold=correlation_threshold,
+        replacement_ic_min=max(ic_threshold * 2.5, ic_threshold + 0.05),
+        replacement_ic_ratio=1.3,
+        fast_screen_assets=100,
+        num_workers=1,
+        output_dir=output_dir,
+        backend="numpy",
+        signal_failure_policy="reject",
+    )
+    cfg.benchmark_mode = "paper"
+    cfg.research = None
+    cfg.target_panels = None
+    cfg.target_horizons = None
+    return cfg
+
+
+def _build_phase2_configs(flags: Dict[str, bool]) -> Dict[str, Any]:
+    """Translate ablation flags into real HelixLoop runtime configs."""
+    return {
+        "debate_config": RuntimeDebateConfig() if flags.get("debate", True) else None,
+        "causal_config": RuntimeCausalConfig(enabled=True) if flags.get("causal", True) else None,
+        "regime_config": RuntimeRegimeConfig(enabled=True) if flags.get("regime", True) else None,
+        "capacity_config": RuntimeCapacityConfig(enabled=True) if flags.get("capacity", True) else None,
+        "significance_config": (
+            RuntimeSignificanceConfig(enabled=True)
+            if flags.get("significance", True)
+            else None
+        ),
+        "canonicalize": flags.get("canonicalize", True),
+    }
+
+
+@contextmanager
+def _patched_memory_hooks(enabled: bool):
+    """Disable memory retrieval and learning when a no-memory ablation is requested."""
+    if enabled:
+        yield
+        return
+
+    def _empty_signal(*_args, **_kwargs) -> dict[str, Any]:
+        return {
+            "recommended_directions": [],
+            "forbidden_directions": [],
+            "insights": [],
+            "library_state": {
+                "library_size": 0,
+                "recent_admission_rate": 0.0,
+                "saturated_domains": {},
+                "recent_admissions_count": 0,
+                "recent_rejections_count": 0,
+            },
+            "prompt_text": "",
+        }
+
+    def _identity_memory(memory, *args, **kwargs):
+        return memory
+
+    patch_targets = [
+        (ralph_loop_module, "retrieve_memory", _empty_signal),
+        (ralph_loop_module, "form_memory", _identity_memory),
+        (ralph_loop_module, "evolve_memory", _identity_memory),
+        (helix_loop_module, "retrieve_memory", _empty_signal),
+        (helix_loop_module, "form_memory", _identity_memory),
+        (helix_loop_module, "evolve_memory", _identity_memory),
+    ]
+
+    originals = []
+    for module, attr, replacement in patch_targets:
+        originals.append((module, attr, getattr(module, attr)))
+        setattr(module, attr, replacement)
+
+    try:
+        yield
+    finally:
+        for module, attr, original in originals:
+            setattr(module, attr, original)
+
+
+def _compute_avg_abs_rho(artifacts) -> float:
+    if len(artifacts) < 2:
+        return 0.0
+
+    corr = np.abs(
+        np.corrcoef([artifact.split_signals["train"].reshape(-1) for artifact in artifacts])
+    )
+    if corr.ndim != 2:
+        return 0.0
+    upper = corr[np.triu_indices_from(corr, k=1)]
+    upper = upper[np.isfinite(upper)]
+    return float(np.mean(upper)) if upper.size else 0.0
+
+
+def _runtime_payload_to_result(
+    *,
+    method: str,
+    payload: Dict[str, Any],
+    benchmark_library_size: int,
+    benchmark_succeeded: int,
+    elapsed_seconds: float,
+    run_id: int,
+) -> MethodResult:
+    """Convert runtime benchmark output into a MethodResult."""
+    library = payload.get("library", {})
+    combinations = payload.get("combinations", {})
+    selections = payload.get("selections", {})
+
+    result = MethodResult(
+        method=method,
+        library_ic=float(library.get("ic", 0.0)),
+        library_icir=float(library.get("icir", 0.0)),
+        avg_abs_rho=float(library.get("avg_abs_rho", 0.0)),
+        ew_ic=float(combinations.get("equal_weight", {}).get("ic", 0.0)),
+        ew_icir=float(combinations.get("equal_weight", {}).get("icir", 0.0)),
+        icw_ic=float(combinations.get("ic_weighted", {}).get("ic", 0.0)),
+        icw_icir=float(combinations.get("ic_weighted", {}).get("icir", 0.0)),
+        lasso_ic=float(selections.get("lasso", {}).get("ic", 0.0)),
+        lasso_icir=float(selections.get("lasso", {}).get("icir", 0.0)),
+        xgb_ic=float(selections.get("xgboost", {}).get("ic", 0.0)),
+        xgb_icir=float(selections.get("xgboost", {}).get("icir", 0.0)),
+        n_factors=benchmark_library_size,
+        admission_rate=benchmark_library_size / max(benchmark_succeeded, 1),
+        elapsed_seconds=elapsed_seconds,
+        ic_series=None,
+        run_id=run_id,
+    )
+    result.runtime_payload = payload
+    return result
+
+
+def _evaluate_runtime_library(
+    library,
+    dataset: EvaluationDataset,
+    cfg: MiningConfig,
+    *,
+    target_library_size: int,
+    cost_bps: Optional[List[float]] = None,
+) -> tuple[MethodResult, Dict[str, Any], int, int]:
+    """Recompute a mined library using the runtime benchmark contract."""
+    if cost_bps is None:
+        cost_bps = [1.0, 4.0, 7.0, 10.0, 11.0]
+
+    factors = library.list_factors()
+    artifacts = evaluate_factors(factors, dataset, signal_failure_policy="reject")
+    succeeded = [artifact for artifact in artifacts if artifact.succeeded]
+    benchmark_library, benchmark_stats = build_benchmark_library(
+        artifacts,
+        cfg,
+        split_name="train",
+        ic_threshold=cfg.ic_threshold,
+        correlation_threshold=cfg.correlation_threshold,
+    )
+    frozen = select_frozen_top_k(
+        artifacts,
+        benchmark_library,
+        top_k=target_library_size,
+        split_name="train",
+    )
+    payload = evaluate_frozen_set(
+        frozen,
+        dataset,
+        split_name="test",
+        fit_split="train",
+        cost_bps=cost_bps,
+    )
+    payload["benchmark"] = {
+        "admitted": benchmark_stats.get("admitted", 0),
+        "succeeded": benchmark_stats.get("succeeded", 0),
+        "replaced": benchmark_stats.get("replaced", 0),
+        "threshold_rejections": benchmark_stats.get("threshold_rejections", 0),
+        "correlation_rejections": benchmark_stats.get("correlation_rejections", 0),
+        "freeze_library_size": benchmark_library.size,
+        "frozen_top_k": [
+            {
+                "name": artifact.name,
+                "formula": artifact.formula,
+                "category": artifact.category,
+                "train_ic": artifact.split_stats["train"]["ic_abs_mean"],
+                "train_icir": abs(artifact.split_stats["train"]["icir"]),
+            }
+            for artifact in frozen
+        ],
+    }
+    result = _runtime_payload_to_result(
+        method="helix_phase2",
+        payload=payload,
+        benchmark_library_size=benchmark_library.size,
+        benchmark_succeeded=max(int(benchmark_stats.get("succeeded", 0)), 1),
+        elapsed_seconds=0.0,
+        run_id=0,
+    )
+    result.n_factors = benchmark_library.size
+    result.admission_rate = benchmark_library.size / max(benchmark_stats.get("succeeded", 0), 1)
+    result.avg_abs_rho = _compute_avg_abs_rho(frozen)
+    return result, payload, benchmark_library.size, int(benchmark_stats.get("succeeded", 0))
+
 
 class AblatedMethodRunner:
-    """Runs a single ablation variant, adapting the candidate pipeline.
-
-    The ablation is implemented at the candidate / library level
-    (not by modifying HelixLoop internals) so it runs on mock data
-    without requiring a full HelixLoop execution.
-    """
+    """Run one ablation variant through the real HelixLoop benchmark path."""
 
     def __init__(
         self,
@@ -110,16 +458,75 @@ class AblatedMethodRunner:
         ic_threshold: float = 0.02,
         correlation_threshold: float = 0.5,
         seed: int = 42,
+        llm_provider: Optional[Any] = None,
+        benchmark_mode: str = "paper",
     ) -> None:
-        self._cfg = cfg
+        self._cfg = dict(cfg)
         self.ic_threshold = ic_threshold
         self.correlation_threshold = correlation_threshold
         self.seed = seed
-        self._bench = HelixBenchmark(
-            ic_threshold=ic_threshold,
-            correlation_threshold=correlation_threshold,
-            seed=seed,
-        )
+        self.llm_provider = llm_provider
+        self.benchmark_mode = benchmark_mode
+
+    def _run_loop(
+        self,
+        *,
+        train_data: dict,
+        n_factors: int,
+    ) -> tuple[HelixLoop, MiningConfig]:
+        """Instantiate and run the real HelixLoop on the training slice."""
+        phase2 = _build_phase2_configs(self._cfg)
+        target_library_size = max(int(n_factors), 1)
+        max_iterations = max(target_library_size * 4, 4)
+        batch_size = max(4, min(target_library_size, 40))
+        loop_dataset = _build_runtime_dataset(train_data)
+        with tempfile.TemporaryDirectory(prefix="factorminer_ablation_") as tmp:
+            mining_cfg = _build_mining_config(
+                output_dir=tmp,
+                target_library_size=target_library_size,
+                batch_size=batch_size,
+                max_iterations=max_iterations,
+                ic_threshold=self.ic_threshold,
+                correlation_threshold=self.correlation_threshold,
+            )
+            mining_cfg.benchmark_mode = self.benchmark_mode
+            if self._cfg.get("memory", True):
+                memory = ExperienceMemory()
+            else:
+                memory = ExperienceMemory()
+
+            loop = HelixLoop(
+                config=mining_cfg,
+                data_tensor=loop_dataset.data_tensor,
+                returns=np.asarray(train_data["forward_returns"], dtype=np.float64),
+                llm_provider=self.llm_provider or MockProvider(),
+                memory=memory,
+                library=FactorLibrary(
+                    correlation_threshold=self.correlation_threshold,
+                    ic_threshold=self.ic_threshold,
+                ),
+                debate_config=phase2["debate_config"],
+                enable_knowledge_graph=False,
+                enable_embeddings=False,
+                enable_auto_inventor=False,
+                auto_invention_interval=10,
+                canonicalize=phase2["canonicalize"],
+                forgetting_lambda=0.95,
+                causal_config=phase2["causal_config"],
+                regime_config=phase2["regime_config"],
+                capacity_config=phase2["capacity_config"],
+                significance_config=phase2["significance_config"],
+                volume=np.asarray(train_data.get("$amt", train_data["forward_returns"]), dtype=np.float64)
+                if "$amt" in train_data
+                else None,
+            )
+            with _patched_memory_hooks(self._cfg.get("memory", True) and self._cfg.get("online_memory", True)):
+                loop.run(
+                    target_size=target_library_size,
+                    max_iterations=max_iterations,
+                    resume=False,
+                )
+            return loop, mining_cfg
 
     def run(
         self,
@@ -127,181 +534,40 @@ class AblatedMethodRunner:
         test_data: dict,
         n_factors: int = 40,
     ) -> MethodResult:
-        """Run this ablation variant and return MethodResult."""
-        # Load catalogs module directly to avoid triggering package __init__
-        import importlib.util as _ilu, pathlib as _pl, sys as _sys
-        _cat_path = _pl.Path(__file__).parent / "catalogs.py"
-        if "factorminer.benchmark.catalogs" not in _sys.modules:
-            _spec = _ilu.spec_from_file_location("factorminer.benchmark.catalogs", str(_cat_path))
-            _cat_mod = _ilu.module_from_spec(_spec)
-            _sys.modules["factorminer.benchmark.catalogs"] = _cat_mod
-            _spec.loader.exec_module(_cat_mod)
-        _cat = _sys.modules["factorminer.benchmark.catalogs"]
-        build_factor_miner_catalog = _cat.build_factor_miner_catalog
-        build_random_exploration = _cat.build_random_exploration
-        ALPHA101_CLASSIC = _cat.ALPHA101_CLASSIC
-
-        from factorminer.core.parser import try_parse
-        from factorminer.evaluation.metrics import (
-            compute_ic, compute_ic_mean, compute_icir, compute_ic_win_rate
-        )
-
+        """Run this ablation variant using the real loop + runtime contract."""
         t0 = time.perf_counter()
+        train_dataset = _build_split_dataset(data, "train")
+        benchmark_dataset = _build_combined_dataset(data, test_data)
 
-        # Build candidates: full FactorMiner catalog + random extras
-        entries = build_factor_miner_catalog()
-        extra = build_random_exploration(seed=self.seed + 3, count=max(80, n_factors * 2))
-        all_entries = entries + extra
-        candidates = [
-            (e.name, e.formula, e.category) for e in all_entries
-        ]
-
-        returns = data["forward_returns"]
-        test_returns = test_data["forward_returns"]
-
-        # Evaluate all candidates
-        factor_results = self._bench._evaluate_candidates(candidates, data, returns)
-
-        # Ablation: no_canonicalize means we skip the SymPy dedup step
-        # (simulated here by allowing near-duplicate formulas through)
-        if not self._cfg.get("canonicalize", True):
-            factor_results = self._apply_no_canonicalize(factor_results, candidates)
-
-        # Ablation: no_causal means we admit factors that would be rejected
-        # by causal validation — simulated by relaxing IC threshold slightly
-        if not self._cfg.get("causal", True):
-            factor_results = self._relax_for_no_causal(factor_results)
-
-        # Ablation: no_regime means we ignore regime-conditional failures
-        # (simulated by loosening admission rules)
-        if not self._cfg.get("regime", True):
-            factor_results = self._relax_for_no_regime(factor_results)
-
-        # Ablation: no_significance means we don't filter by FDR
-        # (simulated by admitting factors with lower significance)
-        if not self._cfg.get("significance", True):
-            factor_results = self._relax_for_no_significance(factor_results)
-
-        # Ablation: no_memory means we ignore memory guidance
-        # (candidates are drawn from random exploration only)
-        if not self._cfg.get("memory", True):
-            rng_entries = build_random_exploration(
-                seed=self.seed + 101, count=max(200, n_factors * 4)
-            )
-            new_candidates = [(e.name, e.formula, e.category) for e in rng_entries]
-            factor_results = self._bench._evaluate_candidates(
-                new_candidates, data, returns
-            )
-
-        # Ablation: no_debate means fewer high-diversity candidates
-        # (simulated by reducing the candidate pool)
-        if not self._cfg.get("debate", True):
-            factor_results = factor_results[:max(len(factor_results) // 2, n_factors * 2)]
-
-        # Build library
-        library = self._bench._build_library(factor_results, n_factors)
-        if not library:
-            return MethodResult(method="ablation", elapsed_seconds=time.perf_counter() - t0)
-
-        # Test evaluation
-        test_results = self._bench._evaluate_candidates(
-            [(r["name"], r["formula"], r.get("category", "Unknown")) for r in library],
-            test_data,
-            test_returns,
+        loop, mining_cfg = self._run_loop(train_data=data, n_factors=n_factors)
+        result, payload, benchmark_library_size, benchmark_succeeded = _evaluate_runtime_library(
+            loop.library,
+            benchmark_dataset,
+            mining_cfg,
+            target_library_size=n_factors,
         )
-
-        lib_ic, lib_icir, avg_rho, ic_series = self._bench._library_metrics(
-            test_results, test_returns
-        )
-        ew_ic, ew_icir, icw_ic, icw_icir = self._bench._combination_metrics(
-            test_results, library, test_returns
-        )
-        lasso_ic, lasso_icir = self._bench._selection_metrics(
-            factor_results, library, data, returns, test_data, test_returns, "lasso"
-        )
-        xgb_ic, xgb_icir = self._bench._selection_metrics(
-            factor_results, library, data, returns, test_data, test_returns, "xgboost"
-        )
-
         elapsed = time.perf_counter() - t0
-        return MethodResult(
-            method="ablation",
-            library_ic=lib_ic,
-            library_icir=lib_icir,
-            avg_abs_rho=avg_rho,
-            ew_ic=ew_ic,
-            ew_icir=ew_icir,
-            icw_ic=icw_ic,
-            icw_icir=icw_icir,
-            lasso_ic=lasso_ic,
-            lasso_icir=lasso_icir,
-            xgb_ic=xgb_ic,
-            xgb_icir=xgb_icir,
-            n_factors=len(library),
-            admission_rate=len(library) / max(len(factor_results), 1),
-            elapsed_seconds=elapsed,
-            ic_series=ic_series,
-        )
 
-    # ------------------------------------------------------------------
-    # Ablation simulators
-    # ------------------------------------------------------------------
+        result.elapsed_seconds = elapsed
+        result.method = "helix_phase2"
+        result.run_id = self.seed
+        result.runtime_payload = {
+            **payload,
+            "train_split": {
+                "train_length": train_dataset.returns.shape[1],
+                "benchmark_library_size": benchmark_library_size,
+                "benchmark_succeeded": benchmark_succeeded,
+            },
+            "ablation": {
+                "name": self._cfg,
+                "seed": self.seed,
+            },
+        }
+        return result
 
-    def _apply_no_canonicalize(
-        self,
-        results: List[dict],
-        candidates: List[Tuple[str, str, str]],
-    ) -> List[dict]:
-        """Without canonicalization, allow more (potentially redundant) candidates."""
-        # In the real system, canonicalization removes duplicates BEFORE eval.
-        # Without it, we admit extra correlated entries. We simulate by
-        # duplicating some high-IC results slightly perturbed.
-        rng = np.random.RandomState(self.seed + 77)
-        extras = []
-        for r in results[:min(10, len(results))]:
-            if r["ic_mean"] > self.ic_threshold and r.get("signals") is not None:
-                # Duplicate with small noise
-                noisy_signals = r["signals"] + rng.randn(*r["signals"].shape) * 0.001
-                extras.append({
-                    **r,
-                    "name": r["name"] + "_canon_dup",
-                    "signals": noisy_signals,
-                })
-        return results + extras
-
-    def _relax_for_no_causal(self, results: List[dict]) -> List[dict]:
-        """Without causal filtering, more factors slip through — lower avg quality."""
-        # Reduce IC threshold by 10% to admit weaker causal evidence
-        lower_thresh = self.ic_threshold * 0.9
-        return [r for r in results if r["ic_mean"] >= lower_thresh]
-
-    def _relax_for_no_regime(self, results: List[dict]) -> List[dict]:
-        """Without regime filtering, admit factors that only work in bull markets."""
-        # We have no regime filter at the mock level; simulate by slightly
-        # degrading icir of admitted factors (regime filtering removes
-        # factors that fail in bear/volatile periods, so without it we get
-        # lower average ICIR across market conditions).
-        for r in results:
-            r["icir"] = r["icir"] * 0.9
-        return results
-
-    def _relax_for_no_significance(self, results: List[dict]) -> List[dict]:
-        """Without significance filtering, more false discoveries are admitted."""
-        # Lower IC threshold slightly — admit factors that would fail FDR
-        lower_thresh = self.ic_threshold * 0.85
-        return [r for r in results if r["ic_mean"] >= lower_thresh]
-
-
-# ---------------------------------------------------------------------------
-# AblationStudy
-# ---------------------------------------------------------------------------
 
 class AblationStudy:
-    """Tests HelixFactor with each Phase 2 component ablated individually.
-
-    Runs each ablation configuration in sequence and measures the
-    IC/ICIR/admission_rate impact of removing each component.
-    """
+    """Run real-loop ablations and summarize component contribution."""
 
     def __init__(
         self,
@@ -309,11 +575,15 @@ class AblationStudy:
         correlation_threshold: float = 0.5,
         seed: int = 42,
         configs: Optional[Dict[str, Dict[str, bool]]] = None,
+        llm_provider: Optional[Any] = None,
+        benchmark_mode: str = "paper",
     ) -> None:
         self.ic_threshold = ic_threshold
         self.correlation_threshold = correlation_threshold
         self.seed = seed
         self.configs = configs or ABLATION_CONFIGS
+        self.llm_provider = llm_provider
+        self.benchmark_mode = benchmark_mode
 
     def run_ablation(
         self,
@@ -323,29 +593,12 @@ class AblationStudy:
         n_factors: int = 40,
         configs_to_run: Optional[List[str]] = None,
     ) -> AblationResult:
-        """Run all (or selected) ablation configurations.
-
-        Parameters
-        ----------
-        data : dict
-            Full data dictionary (will be split internally).
-        train_period / test_period : (int, int)
-            Column index ranges for train and test splits.
-        n_factors : int
-            Target library size per configuration.
-        configs_to_run : list[str], optional
-            Subset of config keys. Default: all configs.
-
-        Returns
-        -------
-        AblationResult
-        """
+        """Run one or more ablation variants on the real loop pipeline."""
         configs_to_run = configs_to_run or list(self.configs.keys())
         train_data = _slice_data(data, *train_period)
         test_data = _slice_data(data, *test_period)
 
         config_results: Dict[str, MethodResult] = {}
-
         for cfg_name in configs_to_run:
             cfg = self.configs.get(cfg_name)
             if cfg is None:
@@ -355,13 +608,14 @@ class AblationStudy:
             label = ABLATION_LABELS.get(cfg_name, cfg_name)
             logger.info("Running ablation: %s", label)
             t0 = time.perf_counter()
-
             try:
                 runner = AblatedMethodRunner(
                     cfg=cfg,
                     ic_threshold=self.ic_threshold,
                     correlation_threshold=self.correlation_threshold,
                     seed=self.seed,
+                    llm_provider=self.llm_provider,
+                    benchmark_mode=self.benchmark_mode,
                 )
                 result = runner.run(
                     data=train_data,
@@ -376,9 +630,7 @@ class AblationStudy:
 
             elapsed = time.perf_counter() - t0
             ic = config_results[cfg_name].library_ic
-            logger.info(
-                "  %s: IC=%.4f  elapsed=%.1fs", cfg_name, ic, elapsed
-            )
+            logger.info("  %s: IC=%.4f  elapsed=%.1fs", cfg_name, ic, elapsed)
 
         ablation = AblationResult(
             configs=configs_to_run,
@@ -388,13 +640,7 @@ class AblationStudy:
         return ablation
 
     def summarize_contributions(self, result: AblationResult) -> pd.DataFrame:
-        """Build a DataFrame showing each component's contribution.
-
-        Returns a table with columns:
-          component, ic_full, ic_ablated, ic_contribution,
-          icir_full, icir_ablated, icir_contribution,
-          admission_rate_delta, interpretation
-        """
+        """Summarize component contributions relative to the full runtime run."""
         full = result.results.get("full")
         if full is None:
             logger.warning("No 'full' config in ablation results; cannot summarize")
@@ -421,10 +667,8 @@ class AblationStudy:
             icir_contrib = full.library_icir - ablated.library_icir
             adm_delta = full.admission_rate - ablated.admission_rate
 
-            # Interpret the contribution direction
             expected_sign = EXPECTED_CONTRIBUTION_SIGN.get(component, +1)
             actual_sign = np.sign(ic_contrib) if ic_contrib != 0 else 0
-
             if abs(ic_contrib) < 0.0005:
                 interpretation = "Negligible"
             elif actual_sign == expected_sign:
@@ -498,7 +742,10 @@ class AblationStudy:
             print(f"\n  FULL System: IC={full.library_ic:.4f}  ICIR={full.library_icir:.3f}")
             print()
 
-        header = f"  {'Component':<22} {'IC Full':>8} {'IC Ablated':>10} {'Delta IC':>10} {'Delta%':>8}  Interpretation"
+        header = (
+            f"  {'Component':<22} {'IC Full':>8} {'IC Ablated':>10} "
+            f"{'Delta IC':>10} {'Delta%':>8}  Interpretation"
+        )
         print(header)
         print("  " + "-" * 80)
 
@@ -513,10 +760,6 @@ class AblationStudy:
         print()
 
 
-# ---------------------------------------------------------------------------
-# Convenience runner
-# ---------------------------------------------------------------------------
-
 def run_full_ablation_study(
     n_assets: int = 100,
     n_periods: int = 500,
@@ -525,20 +768,11 @@ def run_full_ablation_study(
     configs_to_run: Optional[List[str]] = None,
     verbose: bool = True,
 ) -> AblationResult:
-    """End-to-end ablation study on mock data.
-
-    Parameters
-    ----------
-    n_assets / n_periods / n_factors / seed : standard parameters
-    configs_to_run : subset of ABLATION_CONFIGS keys to run
-    verbose : print progress
-
-    Returns
-    -------
-    AblationResult with a filled contributions DataFrame
-    """
+    """Run the full runtime ablation study on mock data."""
     if verbose:
         print("\nGenerating mock data for ablation study...")
+
+    from factorminer.benchmark.helix_benchmark import _build_mock_data_dict
 
     data = _build_mock_data_dict(n_assets=n_assets, n_periods=n_periods, seed=seed)
     T = list(data.values())[0].shape[1]
@@ -547,9 +781,9 @@ def run_full_ablation_study(
     if verbose:
         print(f"  Data: M={n_assets}, T={T}, train=0:{train_end}, test={train_end}:{T}")
         cfgs = configs_to_run or list(ABLATION_CONFIGS.keys())
-        print(f"  Running {len(cfgs)} ablation configurations...")
+        print(f"  Running {len(cfgs)} ablation configurations through real loops...")
 
-    study = AblationStudy(seed=seed)
+    study = AblationStudy(seed=seed, llm_provider=MockProvider())
     result = study.run_ablation(
         data=data,
         train_period=(0, train_end),

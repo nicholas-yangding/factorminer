@@ -13,12 +13,17 @@ Usage:
 Outputs (in results/phase2_benchmark/):
     benchmark_report.html      — full interactive HTML report
     benchmark_report.md        — GitHub-ready Markdown table
+    benchmark_report_full.md    — narrative markdown report
     latex_table.tex            — publication LaTeX Table 1
     ablation_table.tex         — ablation study LaTeX table
     statistical_tests.json     — all statistical test results
+    phase2_manifest.json       — machine-readable artifact/provenance manifest
     library_metrics.csv        — per-method library metrics
     combination_metrics.csv    — per-method combination metrics
     selection_metrics.csv      — per-method selection metrics
+    turnover_metrics.csv       — runtime turnover metrics
+    cost_pressure_metrics.csv  — runtime cost-adjusted metrics
+    runtime_topk.csv           — runtime top-k summary
     comparison_plot.png        — bar chart comparison figure
     ablation_contributions.csv — component contribution summary
 """
@@ -26,21 +31,26 @@ Outputs (in results/phase2_benchmark/):
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
 import json
 import logging
 import sys
 import time
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
 # Insert the repo root so that direct module imports bypass the package __init__
 # (the package __init__ chains through factorminer.agent which has a known
 #  import issue with build_critic_scoring_prompt; all benchmark code is
-#  self-contained in helix_benchmark.py and ablation.py)
+#  self-contained in helix_benchmark.py)
 _REPO_ROOT = Path(__file__).parent
 sys.path.insert(0, str(_REPO_ROOT))
 
@@ -129,6 +139,153 @@ def _subsection(title: str) -> None:
 
 def _fmt_pct(v: float) -> str:
     return f"{v * 100:.2f}%"
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively convert a structure into JSON-safe primitives."""
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fp:
+        for chunk in iter(lambda: fp.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _load_json(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        with open(path) as fp:
+            payload = json.load(fp)
+    except Exception as exc:  # pragma: no cover - defensive provenance capture
+        return {"path": str(path), "load_error": str(exc)}
+    if isinstance(payload, dict):
+        return payload
+    return {"path": str(path), "payload_type": type(payload).__name__}
+
+
+def _collect_runtime_manifest_refs(root: Path) -> list[dict[str, Any]]:
+    if not root.exists():
+        return []
+
+    refs: list[dict[str, Any]] = []
+    for manifest_path in sorted(root.rglob("*_manifest.json")):
+        if manifest_path.name == "phase2_manifest.json":
+            continue
+        payload = _load_json(manifest_path)
+        if payload is None:
+            continue
+
+        refs.append(
+            {
+                "path": str(manifest_path),
+                "sha256": _file_sha256(manifest_path),
+                "benchmark_name": payload.get("benchmark_name"),
+                "baseline": payload.get("baseline"),
+                "mode": payload.get("mode"),
+                "artifact_paths": payload.get("artifact_paths", {}),
+                "baseline_provenance": payload.get("baseline_provenance", {}),
+            }
+        )
+    return refs
+
+
+def _build_phase2_manifest(
+    *,
+    output_dir: Path,
+    methods: list[str],
+    seed: int,
+    n_factors: int,
+    mock: bool,
+    data_path: str | None,
+    full_ablation: bool,
+    skip_ablation: bool,
+    artifact_paths: dict[str, str],
+    statistical_tests: dict[str, Any],
+    ablation_configs: list[str] | None = None,
+    runtime_manifest_root: Path | None = None,
+) -> dict[str, Any]:
+    runtime_refs = _collect_runtime_manifest_refs(
+        runtime_manifest_root or output_dir
+    )
+    return {
+        "benchmark_name": "phase2",
+        "output_dir": str(output_dir),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "run_parameters": {
+            "methods": methods,
+            "seed": seed,
+            "n_factors": n_factors,
+            "mock": mock,
+            "data_path": data_path,
+            "full_ablation": full_ablation,
+            "skip_ablation": skip_ablation,
+        },
+        "artifact_paths": artifact_paths,
+        "statistical_tests": _json_safe(statistical_tests),
+        "ablation": {
+            "configs": ablation_configs or [],
+        },
+        "runtime_manifest_root": str(runtime_manifest_root or output_dir),
+        "runtime_manifest_refs": runtime_refs,
+    }
+
+
+def _derive_split_periods(raw_df: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """Derive contiguous train/test periods from the loaded market data."""
+    timestamps = pd.to_datetime(raw_df["datetime"]).sort_values().unique()
+    if len(timestamps) < 2:
+        raise ValueError("Need at least two timestamps to derive train/test splits")
+
+    split_idx = max(int(len(timestamps) * 0.7), 1)
+    split_idx = min(split_idx, len(timestamps) - 1)
+    train_start = pd.Timestamp(timestamps[0]).isoformat()
+    train_end = pd.Timestamp(timestamps[split_idx - 1]).isoformat()
+    test_start = pd.Timestamp(timestamps[split_idx]).isoformat()
+    test_end = pd.Timestamp(timestamps[-1]).isoformat()
+    return [train_start, train_end], [test_start, test_end]
+
+
+def _runtime_topk_markdown(runtime_artifacts: dict[str, Any]) -> str:
+    frame = _runtime_topk_frame(runtime_artifacts)
+    if frame.empty:
+        return ""
+    return frame.to_markdown(index=False, floatfmt=".4f")
+
+
+def _runtime_topk_frame(runtime_artifacts: dict[str, Any]) -> pd.DataFrame:
+    payloads = runtime_artifacts.get("runtime_payloads", {})
+    rows = []
+    for method, runs in payloads.items():
+        if not runs:
+            continue
+        topk = runs[0].get("frozen_top_k", [])
+        for rank, item in enumerate(topk[:10], 1):
+            rows.append(
+                {
+                    "method": method,
+                    "rank": rank,
+                    "name": item.get("name", ""),
+                    "train_ic": item.get("train_ic", 0.0),
+                    "train_icir": item.get("train_icir", 0.0),
+                }
+            )
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
 
 
 def _print_improvement_table(bench_result) -> None:
@@ -253,7 +410,7 @@ def _print_stat_tests(stat_tests: dict) -> None:
 
 
 def _generate_markdown_report(bench_result, ablation_result, output_dir: Path) -> str:
-    """Build and write a comprehensive Markdown report."""
+    """Build and write a comprehensive narrative Markdown report."""
     md = ["# HelixFactor Phase 2 Benchmark Report\n"]
     md.append(f"**Generated:** {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
@@ -268,6 +425,21 @@ def _generate_markdown_report(bench_result, ablation_result, output_dir: Path) -
 
     md.append("\n\n## Table 4: Speed Benchmarks\n")
     md.append(bench_result.speed_metrics.to_markdown(index=False, floatfmt=".3f"))
+
+    if not getattr(bench_result, "turnover_metrics", pd.DataFrame()).empty:
+        md.append("\n\n## Table 5: Turnover Metrics\n")
+        md.append(bench_result.turnover_metrics.to_markdown(index=False, floatfmt=".4f"))
+
+    if not getattr(bench_result, "cost_pressure_metrics", pd.DataFrame()).empty:
+        md.append("\n\n## Table 6: Cost Pressure Metrics\n")
+        md.append(
+            bench_result.cost_pressure_metrics.to_markdown(index=False, floatfmt=".4f")
+        )
+
+    runtime_topk = _runtime_topk_markdown(getattr(bench_result, "runtime_artifacts", {}))
+    if runtime_topk:
+        md.append("\n\n## Runtime Top-K\n")
+        md.append(runtime_topk)
 
     # Statistical tests
     stat = bench_result.statistical_tests
@@ -286,8 +458,20 @@ def _generate_markdown_report(bench_result, ablation_result, output_dir: Path) -
         md.append(ablation_result.contributions.to_markdown(index=False, floatfmt=".4f"))
 
     content = "\n".join(md)
+    path = output_dir / "benchmark_report_full.md"
+    with open(path, "w") as f:
+        f.write(content)
+    return str(path)
+
+
+def _write_markdown_table(bench_result, output_dir: Path) -> str:
+    """Write the concise GitHub-ready markdown table artifact."""
+    content = bench_result.to_markdown_table()
     path = output_dir / "benchmark_report.md"
     with open(path, "w") as f:
+        f.write(content)
+    # Keep the historical filename as a compatibility alias.
+    with open(output_dir / "readme_table.md", "w") as f:
         f.write(content)
     return str(path)
 
@@ -319,57 +503,52 @@ def main() -> None:
         "factorminer.benchmark.helix_benchmark",
         _REPO_ROOT / "factorminer" / "benchmark" / "helix_benchmark.py",
     )
-    _build_mock_data_dict = _hb._build_mock_data_dict
-    _slice_data = _hb._slice_data
+    _json_safe = _hb._json_safe
     HelixBenchmark = _hb.HelixBenchmark
+    from factorminer.utils.config import load_config
 
-    _abl = _load_module_direct(
-        "factorminer.benchmark.ablation",
-        _REPO_ROOT / "factorminer" / "benchmark" / "ablation.py",
-    )
-    AblationStudy = _abl.AblationStudy
-    ABLATION_CONFIGS = _abl.ABLATION_CONFIGS
+    cfg = load_config()
 
     if args.mock or args.data is None:
         print(f"  Using mock data: {args.n_assets} assets x {args.n_periods} periods")
-        np.random.seed(args.seed)
         t0 = time.perf_counter()
-        data = _build_mock_data_dict(
-            n_assets=args.n_assets,
-            n_periods=args.n_periods,
-            seed=args.seed,
+        from factorminer.data.mock_data import MockConfig, generate_mock_data
+
+        raw_df = generate_mock_data(
+            MockConfig(
+                num_assets=args.n_assets,
+                num_periods=args.n_periods,
+                frequency="10min",
+                universe=cfg.data.universe,
+                plant_alpha=True,
+                seed=args.seed,
+            )
         )
         print(f"  Generated in {time.perf_counter()-t0:.1f}s")
     else:
-        from factorminer.data.loader import load_market_data
-        from factorminer.data.preprocessor import preprocess
         print(f"  Loading real data from: {args.data}")
         t0 = time.perf_counter()
-        raw = load_market_data(args.data)
-        processed = preprocess(raw)
-        assets = sorted(processed["asset_id"].unique())
-        T = processed.groupby("asset_id").size().min()
-        feature_map = {
-            "$open": "open", "$high": "high", "$low": "low", "$close": "close",
-            "$volume": "volume", "$amt": "amount", "$vwap": "vwap",
-            "$returns": "returns",
-        }
-        data = {}
-        for feat, col in feature_map.items():
-            if col in processed.columns:
-                pivot = processed.pivot(index="asset_id", columns="datetime", values=col)
-                pivot = pivot.loc[assets].iloc[:, :T]
-                data[feat] = pivot.values.astype(np.float64)
-        close = data["$close"]
-        fwd = np.roll(close, -1, axis=1) / close - 1
-        fwd[:, -1] = np.nan
-        data["forward_returns"] = fwd
+        from factorminer.data.loader import load_market_data
+
+        raw_df = load_market_data(args.data, universe=cfg.data.universe)
         print(f"  Loaded in {time.perf_counter()-t0:.1f}s")
 
-    T = list(data.values())[0].shape[1]
-    train_end = int(T * 0.7)
-    print(f"  Shape: M={list(data.values())[0].shape[0]}, T={T}")
-    print(f"  Train: [0, {train_end})  Test: [{train_end}, {T})")
+    train_period, test_period = _derive_split_periods(raw_df)
+    cfg_runtime = copy.deepcopy(cfg)
+    cfg_runtime.data.train_period = train_period
+    cfg_runtime.data.test_period = test_period
+    cfg_runtime.mining.target_library_size = args.n_factors
+    cfg_runtime.mining.max_iterations = max(20, args.n_factors * 5)
+    cfg_runtime.benchmark.seed = args.seed
+    cfg_runtime.evaluation.backend = "numpy"
+    cfg_runtime.evaluation.num_workers = min(max(int(cfg_runtime.evaluation.num_workers), 1), 8)
+    if args.mock:
+        cfg_runtime.mining.ic_threshold = 0.0
+        cfg_runtime.mining.icir_threshold = -1.0
+        cfg_runtime.mining.correlation_threshold = 1.1
+
+    print(f"  Shape: M={raw_df['asset_id'].nunique()}, T={raw_df.groupby('asset_id').size().min()}")
+    print(f"  Train: [{train_period[0]}, {train_period[1]}]  Test: [{test_period[0]}, {test_period[1]}]")
 
     # ================================================================
     # STEP 2: Main Comparison Benchmark
@@ -391,13 +570,14 @@ def main() -> None:
 
     bench = HelixBenchmark(seed=args.seed)
     t0 = time.perf_counter()
-    bench_result = bench.run_comparison(
-        data=data,
-        train_period=(0, train_end),
-        test_period=(train_end, T),
+    bench_result, runtime_artifacts = bench.run_runtime_comparison(
+        cfg_runtime,
+        output_dir,
+        raw_df=raw_df,
+        mock=args.mock,
+        baseline_methods=methods,
         n_target_factors=args.n_factors,
         n_runs=1,
-        methods=methods,
     )
     elapsed = time.perf_counter() - t0
     print(f"  Completed in {elapsed:.1f}s")
@@ -440,31 +620,40 @@ def main() -> None:
     if not args.skip_ablation:
         _section("STEP 6: Ablation Study")
 
-        # AblationStudy and ABLATION_CONFIGS already loaded via _load_module_direct above
-
         if args.full_ablation:
-            configs_to_run = list(ABLATION_CONFIGS.keys())
-        else:
-            # Run a focused subset for speed
             configs_to_run = [
-                "full", "no_debate", "no_causal", "no_canonicalize",
-                "no_regime", "no_significance", "no_memory",
+                "full",
+                "no_debate",
+                "no_causal",
+                "no_canonicalize",
+                "no_regime",
+                "no_capacity",
+                "no_significance",
+                "no_memory",
+            ]
+        else:
+            configs_to_run = [
+                "full",
+                "no_debate",
+                "no_regime",
+                "no_capacity",
+                "no_significance",
+                "no_memory",
             ]
 
         print(f"  Configurations: {', '.join(configs_to_run)}")
         t0 = time.perf_counter()
-
-        study = AblationStudy(seed=args.seed)
-        ablation_result = study.run_ablation(
-            data=data,
-            train_period=(0, train_end),
-            test_period=(train_end, T),
-            n_factors=args.n_factors,
+        ablation_result = bench.run_runtime_ablation_study(
+            cfg_runtime,
+            output_dir,
+            raw_df=raw_df,
+            mock=args.mock,
             configs_to_run=configs_to_run,
+            n_target_factors=args.n_factors,
+            n_runs=1,
         )
         elapsed = time.perf_counter() - t0
         print(f"  Completed in {elapsed:.1f}s")
-        study.print_summary(ablation_result)
 
         # Attach ablation result to bench_result
         bench_result.ablation_result = ablation_result
@@ -482,18 +671,24 @@ def main() -> None:
     bench_result.combination_metrics.to_csv(output_dir / "combination_metrics.csv", index=False)
     bench_result.selection_metrics.to_csv(output_dir / "selection_metrics.csv", index=False)
     bench_result.speed_metrics.to_csv(output_dir / "speed_metrics.csv", index=False)
+    if not bench_result.turnover_metrics.empty:
+        bench_result.turnover_metrics.to_csv(output_dir / "turnover_metrics.csv", index=False)
+    if not bench_result.cost_pressure_metrics.empty:
+        bench_result.cost_pressure_metrics.to_csv(output_dir / "cost_pressure_metrics.csv", index=False)
+    runtime_topk = _runtime_topk_frame(runtime_artifacts)
+    if not runtime_topk.empty:
+        runtime_topk.to_csv(output_dir / "runtime_topk.csv", index=False)
 
     # Statistical tests JSON
     with open(output_dir / "statistical_tests.json", "w") as f:
-        json.dump(bench_result.statistical_tests, f, indent=2, default=str)
+        json.dump(_json_safe(bench_result.statistical_tests), f, indent=2, allow_nan=False)
 
     # LaTeX table (Table 1 style)
     with open(output_dir / "latex_table.tex", "w") as f:
         f.write(bench_result.to_latex_table())
 
     # Markdown table
-    with open(output_dir / "readme_table.md", "w") as f:
-        f.write(bench_result.to_markdown_table())
+    table_path = _write_markdown_table(bench_result, output_dir)
 
     # HTML report
     bench_result.generate_full_report(str(output_dir / "benchmark_report.html"))
@@ -507,10 +702,8 @@ def main() -> None:
             ablation_result.contributions.to_csv(
                 output_dir / "ablation_contributions.csv", index=False
             )
-        # AblationStudy already available from _load_module_direct above
-        abl_study = AblationStudy(seed=args.seed)
         with open(output_dir / "ablation_table.tex", "w") as f:
-            f.write(abl_study.to_latex_table(ablation_result))
+            f.write(ablation_result.contributions.to_latex(index=False) if ablation_result.contributions is not None else "% No ablation data available")
 
     # Bar chart comparison
     try:
@@ -518,6 +711,60 @@ def main() -> None:
         print(f"  comparison_plot.png saved")
     except Exception as exc:
         print(f"  (Plot skipped: {exc})")
+
+    phase2_artifact_paths = {
+        "html_report": str((output_dir / "benchmark_report.html").resolve()),
+        "markdown_table": str((output_dir / "benchmark_report.md").resolve()),
+        "narrative_markdown": str((output_dir / "benchmark_report_full.md").resolve()),
+        "latex_table": str((output_dir / "latex_table.tex").resolve()),
+        "manifest": str((output_dir / "phase2_manifest.json").resolve()),
+        "statistical_tests": str((output_dir / "statistical_tests.json").resolve()),
+        "library_metrics": str((output_dir / "library_metrics.csv").resolve()),
+        "combination_metrics": str((output_dir / "combination_metrics.csv").resolve()),
+        "selection_metrics": str((output_dir / "selection_metrics.csv").resolve()),
+        "speed_metrics": str((output_dir / "speed_metrics.csv").resolve()),
+    }
+    if (output_dir / "turnover_metrics.csv").exists():
+        phase2_artifact_paths["turnover_metrics"] = str(
+            (output_dir / "turnover_metrics.csv").resolve()
+        )
+    if (output_dir / "cost_pressure_metrics.csv").exists():
+        phase2_artifact_paths["cost_pressure_metrics"] = str(
+            (output_dir / "cost_pressure_metrics.csv").resolve()
+        )
+    if (output_dir / "runtime_topk.csv").exists():
+        phase2_artifact_paths["runtime_topk"] = str(
+            (output_dir / "runtime_topk.csv").resolve()
+        )
+    if (output_dir / "comparison_plot.png").exists():
+        phase2_artifact_paths["comparison_plot"] = str(
+            (output_dir / "comparison_plot.png").resolve()
+        )
+    if ablation_result is not None and ablation_result.contributions is not None:
+        phase2_artifact_paths["ablation_contributions"] = str(
+            (output_dir / "ablation_contributions.csv").resolve()
+        )
+    if ablation_result is not None:
+        phase2_artifact_paths["ablation_table"] = str(
+            (output_dir / "ablation_table.tex").resolve()
+        )
+
+    phase2_manifest = _build_phase2_manifest(
+        output_dir=output_dir.resolve(),
+        methods=methods,
+        seed=args.seed,
+        n_factors=args.n_factors,
+        mock=args.mock,
+        data_path=args.data,
+        full_ablation=args.full_ablation,
+        skip_ablation=args.skip_ablation,
+        artifact_paths=phase2_artifact_paths,
+        statistical_tests=bench_result.statistical_tests,
+        ablation_configs=getattr(ablation_result, "configs", None),
+        runtime_manifest_root=output_dir,
+    )
+    with open(output_dir / "phase2_manifest.json", "w") as f:
+        json.dump(_json_safe(phase2_manifest), f, indent=2, allow_nan=False)
 
     print(f"\n  Output files saved to: {output_dir.resolve()}")
     for fpath in sorted(output_dir.glob("*")):
@@ -534,6 +781,7 @@ def main() -> None:
     print()
     print(f"  Methods benchmarked: {len(methods)}")
     print(f"  Factors per method: {args.n_factors}")
+    print(f"  Runtime manifests discovered: {len(runtime_artifacts.get('runtime_payloads', {}))}")
 
     if ablation_result is not None:
         print(f"  Ablation configs: {len(ablation_result.configs)}")
@@ -546,7 +794,8 @@ def main() -> None:
             print(f"  *** DM test significant: p={dm.get('p_value', 1):.4f} ***")
     print()
     print(f"  Full report: {output_dir.resolve() / 'benchmark_report.html'}")
-    print(f"  Markdown:    {md_path}")
+    print(f"  Markdown table: {table_path}")
+    print(f"  Narrative markdown: {md_path}")
     print()
 
 
