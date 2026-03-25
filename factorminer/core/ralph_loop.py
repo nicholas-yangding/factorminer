@@ -32,6 +32,7 @@ import numpy as np
 
 from factorminer.core.factor_library import Factor, FactorLibrary
 from factorminer.core.library_io import save_library, load_library
+from factorminer.core.provenance import build_factor_provenance, build_run_manifest
 from factorminer.core.parser import try_parse
 from factorminer.core.session import MiningSession
 from factorminer.core.types import FEATURES
@@ -757,6 +758,7 @@ class RalphLoop:
         self.iteration = 0
         self._session: Optional[MiningSession] = None
         self._session_logger: Optional[MiningSessionLogger] = None
+        self._run_manifest: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # Main loop
@@ -816,6 +818,15 @@ class RalphLoop:
                 config=self._serialize_config(),
                 output_dir=output_dir,
             )
+
+        self._refresh_run_manifest(
+            output_dir=output_dir,
+            artifact_paths={
+                "output_dir": output_dir,
+                "checkpoint_dir": str(Path(output_dir) / "checkpoint"),
+            },
+        )
+        self._persist_run_manifest(Path(output_dir) / "run_manifest.json")
 
         # Initialize session logger
         self._session_logger = MiningSessionLogger(output_dir)
@@ -883,6 +894,18 @@ class RalphLoop:
             elapsed = time.time() - loop_start
             if self._session_logger:
                 self._session_logger.log_session_end(self.library.size, elapsed)
+            self._refresh_run_manifest(
+                output_dir=output_dir,
+                artifact_paths={
+                    "output_dir": output_dir,
+                    "checkpoint_dir": str(Path(output_dir) / "checkpoint"),
+                    "library": str(Path(output_dir) / "factor_library.json"),
+                    "session": str(Path(output_dir) / "session.json"),
+                    "run_manifest": str(Path(output_dir) / "run_manifest.json"),
+                    "session_log": str(Path(output_dir) / "session_log.json"),
+                },
+            )
+            self._persist_run_manifest(Path(output_dir) / "run_manifest.json")
             if self._session:
                 self._session.finalize()
                 self._session.save()
@@ -934,6 +957,19 @@ class RalphLoop:
 
         # Step 4: Library Update -- L <- L + admitted factors
         admitted_results = self._update_library(results)
+
+        provenance_library_state = {
+            **library_state,
+            "diagnostics": self.library.get_diagnostics(),
+        }
+
+        self._attach_factor_provenance(
+            admitted_results,
+            library_state=provenance_library_state,
+            memory_signal=memory_signal,
+            phase2_summary={},
+            generator_family=self._generator_family(),
+        )
 
         # Step 5: Memory Evolution -- E(M, F(M, tau))
         trajectory = self._build_trajectory(results)
@@ -1220,6 +1256,17 @@ class RalphLoop:
         if self._session:
             self._session.library_path = lib_base
             self._session.memory_path = mem_path
+            self._refresh_run_manifest(
+                output_dir=str(checkpoint_dir.parent),
+                artifact_paths={
+                    "library": f"{lib_base}.json",
+                    "memory": mem_path,
+                    "session": str(checkpoint_dir / "session.json"),
+                    "run_manifest": str(checkpoint_dir / "run_manifest.json"),
+                    "loop_state": str(checkpoint_dir / "loop_state.json"),
+                },
+            )
+            self._persist_run_manifest(checkpoint_dir / "run_manifest.json")
             self._session.save(checkpoint_dir / "session.json")
 
         # Save loop state (iteration counter + budget tracker)
@@ -1328,6 +1375,13 @@ class RalphLoop:
         if session_path.exists():
             self._session = MiningSession.load(session_path)
             self._session.status = "running"
+            self._run_manifest = dict(self._session.run_manifest or {})
+
+        if not self._run_manifest:
+            run_manifest_path = checkpoint_dir / "run_manifest.json"
+            if run_manifest_path.exists():
+                with open(run_manifest_path) as f:
+                    self._run_manifest = json.load(f)
 
     @classmethod
     def resume_from(
@@ -1392,3 +1446,153 @@ class RalphLoop:
                 for attr in attrs
                 if getattr(self.config, attr, None) is not None
             }
+
+    def _loop_type(self) -> str:
+        """Label the loop for provenance and manifests."""
+        return "ralph"
+
+    def _phase2_features(self) -> List[str]:
+        """Phase 2 feature flags used by the current loop."""
+        return []
+
+    def _refresh_run_manifest(
+        self,
+        *,
+        output_dir: str,
+        artifact_paths: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Build and cache the current run manifest."""
+        if self._session is None:
+            return {}
+
+        config_summary = self._serialize_config()
+        dataset_summary = {
+            "data_tensor_shape": list(self.data_tensor.shape),
+            "returns_shape": list(self.returns.shape),
+            "memory_version": self.memory.version,
+            "library_size": self.library.size,
+            "library_diagnostics": self.library.get_diagnostics(),
+        }
+        if isinstance(self.config, dict):
+            benchmark_mode = str(self.config.get("benchmark_mode", "paper"))
+            target_stack = list(self.config.get("target_stack", []))
+        else:
+            benchmark_mode = str(getattr(self.config, "benchmark_mode", "paper"))
+            target_stack = list(
+                getattr(self.config, "target_stack", [])
+                or []
+            )
+
+        pipeline_targets = getattr(self.pipeline, "target_panels", None) or {}
+        if pipeline_targets:
+            target_stack = [
+                name
+                for name in pipeline_targets.keys()
+                if name and name != "paper"
+            ] or target_stack
+
+        manifest = build_run_manifest(
+            run_id=self._session.session_id,
+            session_id=self._session.session_id,
+            loop_type=self._loop_type(),
+            benchmark_mode=benchmark_mode,
+            created_at=self._session.start_time,
+            updated_at=datetime.now().isoformat(),
+            iteration=self.iteration,
+            library_size=self.library.size,
+            output_dir=output_dir,
+            config_summary=config_summary,
+            dataset_summary=dataset_summary,
+            phase2_features=self._phase2_features(),
+            target_stack=target_stack,
+            artifact_paths=artifact_paths or {},
+            notes=[],
+        )
+        self._run_manifest = manifest.to_dict()
+        return self._run_manifest
+
+    def _persist_run_manifest(self, path: Path) -> None:
+        """Write the current run manifest to disk and mirror it into the session."""
+        if self._session is None:
+            return
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not self._run_manifest:
+            self._refresh_run_manifest(
+                output_dir=str(path.parent.parent),
+                artifact_paths={"run_manifest": str(path)},
+            )
+        self._run_manifest.setdefault("artifact_paths", {})["run_manifest"] = str(path)
+        with open(path, "w") as f:
+            json.dump(self._run_manifest, f, indent=2, default=str)
+
+        self._session.run_manifest_path = str(path)
+        self._session.run_manifest = self._run_manifest
+
+    def _attach_factor_provenance(
+        self,
+        admitted_results: List[EvaluationResult],
+        *,
+        library_state: Dict[str, Any],
+        memory_signal: Dict[str, Any],
+        phase2_summary: Dict[str, Any],
+        generator_family: Optional[str] = None,
+    ) -> None:
+        """Stamp provenance onto library factors that survived admission."""
+        if not admitted_results or self._session is None:
+            return
+
+        run_manifest = self._run_manifest or self._refresh_run_manifest(
+            output_dir=getattr(self.config, "output_dir", "./output"),
+            artifact_paths={},
+        )
+
+        for rank, result in enumerate(admitted_results, start=1):
+            if not result.admitted:
+                continue
+
+            factor = None
+            for candidate in reversed(self.library.list_factors()):
+                if (
+                    candidate.name == result.factor_name
+                    and candidate.formula == result.formula
+                ):
+                    factor = candidate
+                    break
+            if factor is None:
+                continue
+
+            factor.provenance = build_factor_provenance(
+                run_manifest=run_manifest,
+                factor_name=factor.name,
+                formula=factor.formula,
+                factor_category=factor.category,
+                factor_id=factor.id,
+                iteration=self.iteration,
+                batch_number=factor.batch_number,
+                candidate_rank=rank,
+                generator_family=generator_family or self._generator_family(),
+                memory_signal=memory_signal,
+                library_state=library_state,
+                evaluation={
+                    "ic_mean": factor.ic_mean,
+                    "icir": factor.icir,
+                    "ic_win_rate": factor.ic_win_rate,
+                    "max_correlation": factor.max_correlation,
+                    "research_metrics": factor.research_metrics,
+                },
+                admission={
+                    "admitted": True,
+                    "stage_passed": result.stage_passed,
+                    "replaced": result.replaced,
+                    "correlated_with": result.correlated_with,
+                    "rejection_reason": result.rejection_reason,
+                },
+                phase2=phase2_summary,
+                target_stack=run_manifest.get("target_stack", []),
+                research_metrics=factor.research_metrics,
+            ).to_dict()
+
+    def _generator_family(self) -> str:
+        """Return the active candidate generator label for provenance."""
+        return self.generator.__class__.__name__

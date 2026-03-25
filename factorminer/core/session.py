@@ -37,6 +37,8 @@ class MiningSession:
     iterations: List[Dict[str, Any]] = field(default_factory=list)
     library_path: str = ""
     memory_path: str = ""
+    run_manifest_path: str = ""
+    run_manifest: Dict[str, Any] = field(default_factory=dict)
     status: str = "running"  # running | completed | interrupted
 
     def __post_init__(self) -> None:
@@ -80,6 +82,8 @@ class MiningSession:
             "last_library_size": self.last_library_size,
             "library_path": self.library_path,
             "memory_path": self.memory_path,
+            "run_manifest_path": self.run_manifest_path,
+            "run_manifest": self.run_manifest,
             "iterations": self.iterations,
         }
 
@@ -134,6 +138,8 @@ class MiningSession:
             iterations=data.get("iterations", []),
             library_path=data.get("library_path", ""),
             memory_path=data.get("memory_path", ""),
+            run_manifest_path=data.get("run_manifest_path", ""),
+            run_manifest=data.get("run_manifest", {}),
             status=data.get("status", "interrupted"),
         )
 

@@ -330,3 +330,27 @@ class TestFactorSerialization:
         assert restored.name == f.name
         assert restored.ic_mean == f.ic_mean
         assert restored.formula == f.formula
+
+    def test_factor_roundtrip_preserves_provenance(self):
+        f = Factor(
+            id=6,
+            name="with_provenance",
+            formula="Neg($close)",
+            category="test",
+            ic_mean=0.05,
+            icir=0.9,
+            ic_win_rate=0.55,
+            max_correlation=0.1,
+            batch_number=2,
+            provenance={
+                "run_id": "run_001",
+                "generator_family": "MockProvider",
+                "candidate_rank": 2,
+            },
+        )
+
+        restored = Factor.from_dict(f.to_dict())
+
+        assert restored.provenance["run_id"] == "run_001"
+        assert restored.provenance["generator_family"] == "MockProvider"
+        assert restored.provenance["candidate_rank"] == 2

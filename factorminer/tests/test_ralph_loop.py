@@ -1040,3 +1040,37 @@ class TestCheckpointResume:
         library = loop.run(max_iterations=1, resume=True)
         assert isinstance(library, FactorLibrary)
         assert loop.iteration == 1
+
+    def test_run_exports_manifest_and_factor_provenance(
+        self, test_config, synthetic_data, mock_provider, tmp_dir
+    ):
+        """Completed runs should export a manifest and persist factor provenance."""
+        test_config.output_dir = tmp_dir
+        test_config.ic_threshold = 0.0
+        test_config.icir_threshold = -1.0
+        test_config.correlation_threshold = 1.1
+        data_tensor, returns = synthetic_data
+
+        loop = RalphLoop(
+            config=test_config,
+            data_tensor=data_tensor,
+            returns=returns,
+            llm_provider=mock_provider,
+        )
+        library = loop.run(max_iterations=2, target_size=2)
+
+        manifest_path = Path(tmp_dir) / "run_manifest.json"
+        assert manifest_path.exists()
+
+        manifest = json.loads(manifest_path.read_text())
+        assert manifest["loop_type"] == "ralph"
+        assert manifest["artifact_paths"]["run_manifest"] == str(manifest_path)
+        assert manifest["dataset_summary"]["data_tensor_shape"] == list(data_tensor.shape)
+
+        assert library.size > 0
+        exported_library = json.loads((Path(tmp_dir) / "factor_library.json").read_text())
+        factor_payload = exported_library["factors"][0]
+        assert "provenance" in factor_payload
+        assert factor_payload["provenance"]["run_id"] == loop._session.session_id
+        assert factor_payload["provenance"]["loop_type"] == "ralph"
+        assert factor_payload["provenance"]["generator_family"]

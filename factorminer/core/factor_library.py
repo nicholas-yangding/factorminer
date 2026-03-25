@@ -38,6 +38,7 @@ class Factor:
     admission_date: str = ""
     signals: Optional[np.ndarray] = field(default=None, repr=False)  # (M, T)
     research_metrics: dict = field(default_factory=dict)
+    provenance: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.admission_date:
@@ -57,6 +58,7 @@ class Factor:
             "batch_number": self.batch_number,
             "admission_date": self.admission_date,
             "research_metrics": self.research_metrics,
+            "provenance": self.provenance,
         }
 
     @classmethod
@@ -74,6 +76,7 @@ class Factor:
             batch_number=d["batch_number"],
             admission_date=d.get("admission_date", ""),
             research_metrics=d.get("research_metrics", {}),
+            provenance=d.get("provenance", {}),
         )
 
 
