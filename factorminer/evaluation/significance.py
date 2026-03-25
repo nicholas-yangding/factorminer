@@ -115,26 +115,29 @@ class BootstrapICTester:
         )
 
     def compute_p_value(self, ic_series: np.ndarray) -> float:
-        """Estimate bootstrap p-value for mean |IC| > 0.
+        """Estimate a two-sided p-value for non-zero mean IC.
 
-        p = fraction of bootstrap samples where mean(|resampled_ic|) <= 0.
-
-        Parameters
-        ----------
-        ic_series : np.ndarray, shape (T,)
-
-        Returns
-        -------
-        float
-            p-value in [0, 1].
+        Uses a sign-flip randomization test on the observed IC series.
+        Under the null of no predictive signal, flipping the sign of each
+        period's IC leaves the distribution unchanged while preserving the
+        magnitude structure of the observed sample.
         """
         valid = ic_series[~np.isnan(ic_series)]
-        if len(valid) == 0:
+        T = len(valid)
+        if T == 0:
             return 1.0
 
-        abs_valid = np.abs(valid)
-        boot_means = self._block_bootstrap_means(abs_valid)
-        return float(np.mean(boot_means <= 0))
+        observed = float(abs(np.mean(valid)))
+        if observed < 1e-15:
+            return 1.0
+
+        null_means = np.empty(self._config.bootstrap_n_samples, dtype=np.float64)
+        for i in range(self._config.bootstrap_n_samples):
+            signs = self._rng.choice((-1.0, 1.0), size=T)
+            null_means[i] = abs(float(np.mean(valid * signs)))
+
+        exceedances = int(np.sum(null_means >= observed))
+        return float((exceedances + 1) / (len(null_means) + 1))
 
     # ----- internals -----
 
@@ -150,7 +153,7 @@ class BootstrapICTester:
         Parameters
         ----------
         series : np.ndarray, shape (T,)
-            Already cleaned (no NaN) series of |IC| values.
+            Already cleaned (no NaN) series values.
 
         Returns
         -------
@@ -460,16 +463,17 @@ def check_significance(
 
     details: Dict = {}
 
-    # -- Bootstrap IC CI --
+    # -- Bootstrap IC CI / p-value --
     bt = BootstrapICTester(config)
     ci_result = bt.compute_ci(factor_name, ic_series)
     details["bootstrap_ci"] = ci_result
+    p_value = bt.compute_p_value(ic_series)
+    details["bootstrap_p_value"] = p_value
 
-    if not ci_result.ci_excludes_zero:
+    if p_value > config.fdr_level:
         return (
             False,
-            f"Bootstrap {config.bootstrap_confidence*100:.0f}% CI for mean |IC| includes zero "
-            f"[{ci_result.ci_lower:.4f}, {ci_result.ci_upper:.4f}]",
+            f"Bootstrap p-value {p_value:.4f} exceeds alpha {config.fdr_level:.4f}",
             details,
         )
 

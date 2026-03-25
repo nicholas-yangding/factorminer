@@ -15,7 +15,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -111,7 +111,8 @@ class FactorKnowledgeGraph:
 
     Uses ``networkx.DiGraph`` internally. Factor nodes store a
     :class:`FactorNode` dataclass; operator nodes are prefixed with
-    ``op:`` and feature nodes with ``feat:``.
+    ``op:``. Factor metadata retains the declared features even though
+    the graph currently materializes operator structure explicitly.
     """
 
     def __init__(self) -> None:
@@ -123,12 +124,15 @@ class FactorKnowledgeGraph:
     # ------------------------------------------------------------------
 
     def add_factor(self, node: FactorNode) -> None:
-        """Add a factor node and auto-create USES_OPERATOR edges.
+        """Add or replace a factor node and auto-create USES_OPERATOR edges.
 
         For each operator in ``node.operators``, an ``op:{name}`` node
         is created (if absent) and a USES_OPERATOR edge is drawn from
         the factor to that operator node.
         """
+        if self._graph.has_node(node.factor_id):
+            self.remove_factor(node.factor_id)
+
         self._graph.add_node(
             node.factor_id,
             node_type="factor",
@@ -144,6 +148,41 @@ class FactorKnowledgeGraph:
                 op_id,
                 edge_type=EdgeType.USES_OPERATOR.value,
             )
+
+    def get_factor_node(self, factor_id: str) -> Optional[FactorNode]:
+        """Return a factor node by id, or ``None`` if missing."""
+        attrs = self._graph.nodes.get(factor_id)
+        if not attrs or attrs.get("node_type") != "factor":
+            return None
+        data = attrs.get("data", {})
+        if not isinstance(data, dict):
+            return None
+        try:
+            return FactorNode.from_dict(data)
+        except Exception:
+            return None
+
+    def iter_factor_nodes(
+        self,
+        admitted_only: bool = False,
+    ) -> Iterable[FactorNode]:
+        """Yield factor nodes currently present in the graph."""
+        for node_id, attrs in self._graph.nodes(data=True):
+            if attrs.get("node_type") != "factor":
+                continue
+            data = attrs.get("data", {})
+            if not isinstance(data, dict):
+                continue
+            if admitted_only and not data.get("admitted", False):
+                continue
+            try:
+                yield FactorNode.from_dict(data)
+            except Exception:
+                continue
+
+    def list_factor_nodes(self, admitted_only: bool = False) -> List[FactorNode]:
+        """Return all factor nodes as a list."""
+        return list(self.iter_factor_nodes(admitted_only=admitted_only))
 
     # ------------------------------------------------------------------
     # Edge operations
@@ -184,6 +223,18 @@ class FactorKnowledgeGraph:
             edge_type=EdgeType.DERIVED_FROM.value,
             mutation_type=mutation_type,
         )
+
+    def remove_factor(self, factor_id: str) -> bool:
+        """Remove a factor and prune orphaned auxiliary nodes.
+
+        Returns ``True`` when the factor was present.
+        """
+        if not self._graph.has_node(factor_id):
+            return False
+
+        self._graph.remove_node(factor_id)
+        self._prune_orphan_aux_nodes()
+        return True
 
     # ------------------------------------------------------------------
     # Query operations
@@ -354,3 +405,14 @@ class FactorKnowledgeGraph:
                 # Strip "op:" prefix
                 ops.add(nbr.removeprefix("op:"))
         return ops
+
+    def _prune_orphan_aux_nodes(self) -> None:
+        """Remove operator nodes that are no longer referenced."""
+        orphan_nodes = [
+            node_id
+            for node_id, attrs in self._graph.nodes(data=True)
+            if attrs.get("node_type") in {"operator", "feature"}
+            and self._graph.degree(node_id) == 0
+        ]
+        if orphan_nodes:
+            self._graph.remove_nodes_from(orphan_nodes)

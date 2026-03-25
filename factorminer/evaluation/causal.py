@@ -136,10 +136,15 @@ class CausalValidator:
         """
         cfg = self.config
         details: Dict[str, Any] = {}
+        control_library = {
+            name: lib_signals
+            for name, lib_signals in self.library_signals.items()
+            if name != factor_name
+        }
 
         # --- Granger ---
         g_p, g_f, g_pass = self._granger_test(
-            signals, self.returns, self.library_signals
+            signals, self.returns, control_library
         )
         details["granger"] = {
             "p_value": g_p,

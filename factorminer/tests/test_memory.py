@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 
 from factorminer.memory.experience_memory import ExperienceMemoryManager
+from factorminer.memory.embeddings import FormulaEmbedder
+from factorminer.memory.kg_retrieval import retrieve_memory_enhanced
+from factorminer.memory.knowledge_graph import FactorKnowledgeGraph, FactorNode
 from factorminer.memory.memory_store import (
     ExperienceMemory,
     ForbiddenDirection,
@@ -185,6 +188,53 @@ class TestRetrieval:
         names = [p["name"] for p in result["recommended_directions"]]
         # There should still be patterns, but saturated ones ranked lower
         assert len(names) > 0
+
+    def test_enhanced_retrieval_uses_semantic_similarity_and_removals(self):
+        memory = ExperienceMemory()
+        memory.state.recent_admissions = [
+            {
+                "factor_id": "query_factor",
+                "formula": "CsRank(Corr($close, $volume, 20))",
+            }
+        ]
+
+        kg = FactorKnowledgeGraph()
+        kg.add_factor(FactorNode(
+            factor_id="neighbor_factor",
+            formula="CsRank(Corr($close, $volume, 20))",
+            operators=["CsRank", "Corr"],
+            features=["$close", "$volume"],
+            admitted=True,
+        ))
+        kg.add_factor(FactorNode(
+            factor_id="distant_factor",
+            formula="Neg(Std($returns, 10))",
+            operators=["Neg", "Std"],
+            features=["$returns"],
+            admitted=True,
+        ))
+
+        embedder = FormulaEmbedder(use_faiss=False)
+
+        result = retrieve_memory_enhanced(
+            memory,
+            kg=kg,
+            embedder=embedder,
+        )
+
+        assert result["semantic_neighbors"]
+        assert any("neighbor_factor" in item for item in result["semantic_neighbors"])
+
+        kg.remove_factor("neighbor_factor")
+        embedder.remove("neighbor_factor")
+
+        refreshed = retrieve_memory_enhanced(
+            memory,
+            kg=kg,
+            embedder=embedder,
+        )
+
+        assert all("neighbor_factor" not in item for item in refreshed["semantic_neighbors"])
 
 
 # ---------------------------------------------------------------------------

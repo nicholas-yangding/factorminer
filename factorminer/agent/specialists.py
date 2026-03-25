@@ -15,7 +15,11 @@ from typing import Any, Dict, List, Optional
 
 from factorminer.agent.llm_interface import LLMProvider
 from factorminer.agent.output_parser import CandidateFactor, parse_llm_output
-from factorminer.agent.prompt_builder import SYSTEM_PROMPT, PromptBuilder
+from factorminer.agent.prompt_builder import (
+    SYSTEM_PROMPT,
+    PromptBuilder,
+    normalize_factor_references,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +366,7 @@ class SpecialistAgent:
         memory_signal = memory_signal or {}
         library_diagnostics = library_diagnostics or {}
         forbidden_patterns = forbidden_patterns or []
-        existing_factors = existing_factors or []
+        existing_factors = normalize_factor_references(existing_factors)
 
         enriched_signal = self._enrich_memory_signal(
             memory_signal, forbidden_patterns, regime_context

@@ -399,6 +399,7 @@ class HelixLoop(RalphLoop):
             if EmbedderCls is not None:
                 try:
                     self._embedder = EmbedderCls()
+                    self._prime_embedder_from_library()
                     logger.info("Helix: formula embeddings enabled")
                 except Exception as exc:
                     logger.warning("Helix: failed to init embedder: %s", exc)
@@ -485,8 +486,9 @@ class HelixLoop(RalphLoop):
         # ==================================================================
         # Stage 3: SYNTHESIZE (canonicalize + dedup)
         # ==================================================================
-        candidates, n_canon_dupes = self._canonicalize_and_dedup(candidates)
+        candidates, n_canon_dupes, n_semantic_dupes = self._canonicalize_and_dedup(candidates)
         helix_stats["canonical_duplicates_removed"] = n_canon_dupes
+        helix_stats["semantic_duplicates_removed"] = n_semantic_dupes
 
         if not candidates:
             logger.warning(
@@ -505,6 +507,22 @@ class HelixLoop(RalphLoop):
         rejected_by_phase2 = self._helix_validate(results, admitted_results)
         helix_stats["phase2_rejections"] = rejected_by_phase2
         surviving_admissions = [r for r in admitted_results if r.admitted]
+
+        provenance_library_state = {
+            **library_state,
+            "diagnostics": self.library.get_diagnostics(),
+        }
+
+        self._attach_factor_provenance(
+            surviving_admissions,
+            library_state=provenance_library_state,
+            memory_signal=memory_signal,
+            phase2_summary={
+                "enabled_features": self._phase2_features(),
+                "phase2_rejections": rejected_by_phase2,
+            },
+            generator_family=self._generator_family(),
+        )
 
         # ==================================================================
         # Stage 5: DISTILL
@@ -536,11 +554,11 @@ class HelixLoop(RalphLoop):
             ic_values = [r.ic_mean for r in results if r.parse_ok]
             record = IterationRecord(
                 iteration=self.iteration,
-                candidates_generated=len(candidates) + n_canon_dupes,
+                candidates_generated=len(candidates) + n_canon_dupes + n_semantic_dupes,
                 ic_passed=stats["ic_passed"],
                 correlation_passed=stats["corr_passed"],
                 admitted=stats["admitted"],
-                rejected=len(candidates) + n_canon_dupes - stats["admitted"],
+                rejected=len(candidates) + n_canon_dupes + n_semantic_dupes - stats["admitted"],
                 replaced=stats["replaced"],
                 library_size=self.library.size,
                 best_ic=max(ic_values) if ic_values else 0.0,
@@ -647,7 +665,7 @@ class HelixLoop(RalphLoop):
 
     def _canonicalize_and_dedup(
         self, candidates: List[Tuple[str, str]]
-    ) -> Tuple[List[Tuple[str, str]], int]:
+    ) -> Tuple[List[Tuple[str, str]], int, int]:
         """Stage 3 SYNTHESIZE: Remove mathematically equivalent candidates.
 
         Uses SymPy-based canonicalization to detect algebraic duplicates
@@ -655,50 +673,64 @@ class HelixLoop(RalphLoop):
 
         Returns
         -------
-        tuple of (deduplicated_candidates, n_duplicates_removed)
+        tuple of (deduplicated_candidates, n_canonical_duplicates_removed,
+        n_semantic_duplicates_removed)
         """
-        if self._canonicalizer is None:
-            return candidates, 0
+        if self._canonicalizer is None and self._embedder is None:
+            return candidates, 0, 0
 
         seen_hashes: Dict[str, str] = {}  # hash -> first factor name
         unique: List[Tuple[str, str]] = []
-        n_dupes = 0
+        n_canon_dupes = 0
+        n_semantic_dupes = 0
 
         for name, formula in candidates:
             tree = try_parse(formula)
-            if tree is None:
-                # Keep unparseable candidates; the pipeline will reject them
-                unique.append((name, formula))
-                continue
+            if tree is not None and self._canonicalizer is not None:
+                try:
+                    canon_hash = self._canonicalizer.canonicalize(tree)
+                except Exception as exc:
+                    logger.debug(
+                        "Helix: canonicalization failed for '%s': %s", name, exc
+                    )
+                else:
+                    if canon_hash in seen_hashes:
+                        n_canon_dupes += 1
+                        logger.debug(
+                            "Helix: canonical duplicate '%s' matches '%s'",
+                            name,
+                            seen_hashes[canon_hash],
+                        )
+                        continue
+                    seen_hashes[canon_hash] = name
 
-            try:
-                canon_hash = self._canonicalizer.canonicalize(tree)
-            except Exception as exc:
+            semantic_match = self._semantic_duplicate_target(formula)
+            if semantic_match is not None:
+                n_semantic_dupes += 1
                 logger.debug(
-                    "Helix: canonicalization failed for '%s': %s", name, exc
-                )
-                unique.append((name, formula))
-                continue
-
-            if canon_hash in seen_hashes:
-                n_dupes += 1
-                logger.debug(
-                    "Helix: canonical duplicate '%s' matches '%s'",
+                    "Helix: semantic duplicate '%s' matches library factor '%s'",
                     name,
-                    seen_hashes[canon_hash],
+                    semantic_match,
                 )
-            else:
-                seen_hashes[canon_hash] = name
-                unique.append((name, formula))
+                continue
 
-        if n_dupes > 0:
+            unique.append((name, formula))
+
+        if n_canon_dupes > 0:
             logger.info(
                 "Helix: canonicalization removed %d/%d duplicate candidates",
-                n_dupes,
+                n_canon_dupes,
                 len(candidates),
             )
 
-        return unique, n_dupes
+        if n_semantic_dupes > 0:
+            logger.info(
+                "Helix: embedding screen removed %d/%d library-adjacent candidates",
+                n_semantic_dupes,
+                len(candidates),
+            )
+
+        return unique, n_canon_dupes, n_semantic_dupes
 
     # ------------------------------------------------------------------
     # Stage 4: Extended validation
@@ -966,6 +998,7 @@ class HelixLoop(RalphLoop):
                     and factor.formula == result.formula
                 ):
                     self.library.remove_factor(factor.id)
+                    self._remove_semantic_artifacts(result.factor_name)
                     logger.debug(
                         "Helix: revoked factor '%s' (id=%d): %s",
                         result.factor_name,
@@ -979,6 +1012,8 @@ class HelixLoop(RalphLoop):
                 result.factor_name,
                 exc,
             )
+
+        self._remove_semantic_artifacts(result.factor_name)
 
     # ------------------------------------------------------------------
     # Stage 5: Enhanced distillation
@@ -1039,6 +1074,15 @@ class HelixLoop(RalphLoop):
                 batch_number=self.iteration,
                 admitted=True,
             )
+            if self._embedder is not None:
+                try:
+                    node.embedding = self._embedder.embed(r.factor_name, r.formula)
+                except Exception as exc:
+                    logger.debug(
+                        "Helix: failed to attach embedding for '%s': %s",
+                        r.factor_name,
+                        exc,
+                    )
 
             try:
                 self._kg.add_factor(node)
@@ -1069,6 +1113,28 @@ class HelixLoop(RalphLoop):
 
             # Detect derivation (mutation) relationships
             self._detect_derivation(r, operators)
+
+    def _remove_semantic_artifacts(self, factor_id: str) -> None:
+        """Remove a factor from derived semantic stores if present."""
+        if self._kg is not None:
+            try:
+                self._kg.remove_factor(factor_id)
+            except Exception as exc:
+                logger.debug(
+                    "Helix: failed to remove factor '%s' from KG: %s",
+                    factor_id,
+                    exc,
+                )
+
+        if self._embedder is not None:
+            try:
+                self._embedder.remove(factor_id)
+            except Exception as exc:
+                logger.debug(
+                    "Helix: failed to remove factor '%s' from embedder: %s",
+                    factor_id,
+                    exc,
+                )
 
     def _detect_derivation(
         self,
@@ -1335,6 +1401,25 @@ class HelixLoop(RalphLoop):
         except Exception as exc:
             logger.warning("Helix: failed to save helix state: %s", exc)
 
+        if self._session is not None:
+            self._refresh_run_manifest(
+                output_dir=str(checkpoint_dir.parent),
+                artifact_paths={
+                    "library": str(checkpoint_dir / "library.json"),
+                    "memory": str(checkpoint_dir / "memory.json"),
+                    "session": str(checkpoint_dir / "session.json"),
+                    "run_manifest": str(checkpoint_dir / "run_manifest.json"),
+                    "loop_state": str(checkpoint_dir / "loop_state.json"),
+                    "helix_state": str(checkpoint_dir / "helix_state.json"),
+                    "knowledge_graph": str(checkpoint_dir / "knowledge_graph.json"),
+                },
+            )
+            self._persist_run_manifest(checkpoint_dir / "run_manifest.json")
+            try:
+                self._session.save(checkpoint_dir / "session.json")
+            except Exception as exc:
+                logger.warning("Helix: failed to save session metadata: %s", exc)
+
         return checkpoint_path
 
     def load_session(self, path: str) -> None:
@@ -1395,6 +1480,53 @@ class HelixLoop(RalphLoop):
                     "Helix: failed to load helix state: %s", exc
                 )
 
+        self._prime_embedder_from_library()
+        if self._session is not None and self._session.run_manifest:
+            self._run_manifest = dict(self._session.run_manifest)
+        else:
+            run_manifest_path = checkpoint_dir / "run_manifest.json"
+            if run_manifest_path.exists():
+                try:
+                    with open(run_manifest_path) as f:
+                        self._run_manifest = json.load(f)
+                except Exception as exc:
+                    logger.warning(
+                        "Helix: failed to load run manifest: %s", exc
+                    )
+
+    def _loop_type(self) -> str:
+        """Label the loop for provenance and manifests."""
+        return "helix"
+
+    def _phase2_features(self) -> List[str]:
+        """List the enabled Helix Phase 2 features."""
+        features: List[str] = []
+        if self._debate_generator is not None:
+            features.append("debate")
+        if self._canonicalizer is not None:
+            features.append("canonicalization")
+        if self._kg is not None:
+            features.append("knowledge_graph")
+        if self._embedder is not None:
+            features.append("embeddings")
+        if self._causal_validator is not None:
+            features.append("causal")
+        if self._regime_evaluator is not None:
+            features.append("regime")
+        if self._capacity_estimator is not None:
+            features.append("capacity")
+        if self._bootstrap_tester is not None and self._fdr_controller is not None:
+            features.append("significance")
+        if self._auto_inventor is not None:
+            features.append("auto_inventor")
+        return features
+
+    def _generator_family(self) -> str:
+        """Return the active Helix generator label for provenance."""
+        if self._debate_generator is not None:
+            return self._debate_generator.__class__.__name__
+        return super()._generator_family()
+
     # ------------------------------------------------------------------
     # Utility helpers
     # ------------------------------------------------------------------
@@ -1408,3 +1540,37 @@ class HelixLoop(RalphLoop):
     def _extract_features(formula: str) -> List[str]:
         """Extract feature names (e.g. $close, $volume) from a formula."""
         return re.findall(r"\$[a-zA-Z_]+", formula)
+
+    def _prime_embedder_from_library(self) -> None:
+        """Seed the embedder cache from the currently admitted library."""
+        if self._embedder is None:
+            return
+
+        try:
+            self._embedder.clear()
+        except Exception as exc:
+            logger.debug("Helix: failed to clear embedder before priming: %s", exc)
+            return
+
+        for factor in self.library.list_factors():
+            if not factor.formula:
+                continue
+            try:
+                self._embedder.embed(factor.name, factor.formula)
+            except Exception as exc:
+                logger.debug(
+                    "Helix: failed to prime embedding for '%s': %s",
+                    factor.name,
+                    exc,
+                )
+
+    def _semantic_duplicate_target(self, formula: str) -> Optional[str]:
+        """Return the matched library factor if embeddings flag a near-duplicate."""
+        if self._embedder is None or self.library.size == 0:
+            return None
+
+        try:
+            return self._embedder.is_semantic_duplicate(formula)
+        except Exception as exc:
+            logger.debug("Helix: semantic duplicate check failed: %s", exc)
+            return None

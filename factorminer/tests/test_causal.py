@@ -114,3 +114,34 @@ def test_intervention_robust_signal(rng):
     assert result.intervention_ic_ratio > 0.0
     assert isinstance(result.intervention_passes, bool)
     assert isinstance(result.robustness_score, float)
+
+
+def test_validate_excludes_candidate_from_control_library(rng):
+    """A factor under test should not be used as its own Granger control."""
+    M, T = 8, 40
+    signal = rng.normal(0, 1, (M, T))
+    returns = rng.normal(0, 0.01, (M, T))
+    control = rng.normal(0, 1, (M, T))
+
+    validator = CausalValidator(
+        returns=returns,
+        data_tensor=None,
+        library_signals={
+            "candidate_factor": signal.copy(),
+            "control_factor": control,
+        },
+        config=CausalConfig(seed=42),
+    )
+
+    captured: dict[str, np.ndarray] = {}
+
+    def _capture_controls(signals_arg, returns_arg, library_signals_arg):
+        captured.update(library_signals_arg)
+        return 1.0, 0.0, True
+
+    validator._granger_test = _capture_controls  # type: ignore[method-assign]
+    result = validator.validate("candidate_factor", signal)
+
+    assert result.granger_passes is True
+    assert "candidate_factor" not in captured
+    assert "control_factor" in captured

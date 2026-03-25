@@ -25,7 +25,10 @@ from factorminer.agent.critic import CriticAgent, CriticScore
 from factorminer.agent.factor_generator import FactorGenerator
 from factorminer.agent.llm_interface import LLMProvider
 from factorminer.agent.output_parser import CandidateFactor
-from factorminer.agent.prompt_builder import PromptBuilder
+from factorminer.agent.prompt_builder import (
+    PromptBuilder,
+    normalize_factor_references,
+)
 from factorminer.agent.specialists import (
     DEFAULT_SPECIALISTS,
     SpecialistAgent,
@@ -348,7 +351,7 @@ class DebateOrchestrator:
         memory_signal = memory_signal or {}
         library_diagnostics = library_diagnostics or {}
         forbidden_patterns = forbidden_patterns or []
-        existing_factors = existing_factors or []
+        existing_factors = normalize_factor_references(existing_factors)
 
         # Step 1: Specialist generation
         if self.parallel_specialists and len(self.specialists) > 1:
@@ -669,7 +672,9 @@ class DebateGenerator:
             self.config.candidates_per_specialist,
         )
 
-        existing_factors = list(library_state.get("recent_admissions", []))
+        existing_factors = normalize_factor_references(
+            library_state.get("recent_admissions", [])
+        )
         regime_context = str(memory_signal.get("regime_context", ""))
 
         if self._orchestrator is not None:

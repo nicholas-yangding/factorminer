@@ -63,9 +63,40 @@ def test_bootstrap_weak_signal_includes_zero(config):
     assert result.ci_lower <= result.ci_upper
 
 
+def test_bootstrap_p_value_distinguishes_signal_from_noise(config):
+    """The sign-flip p-value should be small for signal and large for noise."""
+    rng = np.random.default_rng(7)
+    strong_ic = 0.08 + rng.normal(0.0, 0.01, 200)
+    weak_ic = rng.normal(0.0, 0.05, 200)
+
+    tester = BootstrapICTester(config)
+
+    strong_p = tester.compute_p_value(strong_ic)
+    weak_p = tester.compute_p_value(weak_ic)
+
+    assert strong_p < 0.05
+    assert weak_p > 0.05
+
+
 # -----------------------------------------------------------------------
 # FDRController: BH procedure
 # -----------------------------------------------------------------------
+
+def test_fdr_batch_evaluate_separates_signal_from_noise(config):
+    """Batch FDR should keep the strong series and reject the weak one."""
+    strong_ic = np.full(200, 0.08)
+    weak_ic = np.tile(np.array([0.05, -0.05]), 100)
+
+    tester = BootstrapICTester(config)
+    controller = FDRController(config)
+    result = controller.batch_evaluate(
+        {"strong_factor": strong_ic, "weak_factor": weak_ic},
+        tester,
+    )
+
+    assert result.significant["strong_factor"]
+    assert not result.significant["weak_factor"]
+    assert result.n_discoveries == 1
 
 def test_fdr_bh_procedure(config):
     """10 factors with p-values [0.001, ..., 0.010] at FDR=0.05."""

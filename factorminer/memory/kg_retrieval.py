@@ -65,6 +65,8 @@ def retrieve_memory_enhanced(
     result["complementary_patterns"] = []
     result["conflict_warnings"] = []
     result["operator_cooccurrence"] = []
+    result["semantic_neighbors"] = []
+    result["semantic_duplicates"] = []
     result["semantic_gaps"] = []
 
     # ----------------------------------------------------------------
@@ -103,6 +105,14 @@ def retrieve_memory_enhanced(
     # Embedding-based augmentations
     # ----------------------------------------------------------------
     if embedder is not None:
+        _seed_embedder_from_memory(memory, kg, embedder)
+        semantic_neighbors, semantic_duplicates = _collect_semantic_context(
+            memory=memory,
+            kg=kg,
+            embedder=embedder,
+        )
+        result["semantic_neighbors"] = semantic_neighbors
+        result["semantic_duplicates"] = semantic_duplicates
         result["semantic_gaps"] = _find_semantic_gaps(memory, kg, embedder)
 
     # ----------------------------------------------------------------
@@ -138,6 +148,18 @@ def retrieve_memory_enhanced(
             extra_sections.append(f"  - {op}")
         extra_sections.append("")
 
+    if result["semantic_neighbors"]:
+        extra_sections.append("=== SEMANTIC NEIGHBORS (similar library factors) ===")
+        for item in result["semantic_neighbors"][:8]:
+            extra_sections.append(f"  - {item}")
+        extra_sections.append("")
+
+    if result["semantic_duplicates"]:
+        extra_sections.append("=== SEMANTIC DUPLICATES (near-duplicate risk) ===")
+        for item in result["semantic_duplicates"][:5]:
+            extra_sections.append(f"  - {item}")
+        extra_sections.append("")
+
     if extra_sections:
         result["prompt_text"] += "\n" + "\n".join(extra_sections)
 
@@ -154,43 +176,128 @@ def _find_semantic_gaps(
     kg: Optional[FactorKnowledgeGraph],  # type: ignore[type-arg]
     embedder: Optional[FormulaEmbedder],  # type: ignore[type-arg]
 ) -> List[str]:
-    """Identify operators that appear in success-pattern templates but
-    are under-represented in admitted factors in the knowledge graph.
-    """
+    """Identify success-pattern operators with poor semantic coverage."""
     import re
 
-    # Operators mentioned in success-pattern templates
     template_ops: Set[str] = set()
     op_pattern = re.compile(r"\b([A-Z][a-zA-Z]+)\(")
+
     for pat in memory.success_patterns:
         for match in op_pattern.finditer(pat.template):
             template_ops.add(match.group(1))
 
-    if kg is None or kg.get_factor_count() == 0:
-        # No graph data -- return all template ops as potential gaps
+    if not template_ops:
+        return []
+
+    if embedder is None:
         return sorted(template_ops)
 
-    # Count operator usage in admitted factors
-    cooc = kg.get_operator_cooccurrence()
-    used_ops: Set[str] = set()
-    for (a, b) in cooc:
-        used_ops.add(a)
-        used_ops.add(b)
+    # A pattern is considered underexplored when it has no close semantic
+    # neighbors in the current library representation.
+    uncovered_ops: Set[str] = set()
+    anchors = list(memory.success_patterns[:10])
+    if not anchors:
+        return sorted(template_ops)
 
-    # Also scan individual factors for single-operator formulas
-    try:
-        for node_id, attrs in kg._graph.nodes(data=True):
-            if attrs.get("node_type") != "factor":
+    for pat in anchors:
+        nearest = embedder.find_nearest(pat.template, k=1)
+        best_similarity = nearest[0][1] if nearest else 0.0
+        if best_similarity < 0.72:
+            for match in op_pattern.finditer(pat.template):
+                uncovered_ops.add(match.group(1))
+
+    if not uncovered_ops and kg is None:
+        return sorted(template_ops)
+
+    if not uncovered_ops:
+        # Fall back to the operators that are entirely absent from the admitted set.
+        used_ops: Set[str] = set()
+        if kg is not None:
+            for node in kg.list_factor_nodes(admitted_only=True):
+                used_ops.update(node.operators)
+        uncovered_ops = template_ops - used_ops
+
+    return sorted(uncovered_ops or template_ops)
+
+
+def _seed_embedder_from_memory(
+    memory: ExperienceMemory,
+    kg: Optional[FactorKnowledgeGraph],  # type: ignore[type-arg]
+    embedder: FormulaEmbedder,  # type: ignore[type-arg]
+) -> None:
+    """Ensure the embedder cache reflects the current known factors."""
+    seen: Set[str] = set()
+
+    if kg is not None:
+        for node in kg.list_factor_nodes(admitted_only=True):
+            if node.factor_id and node.formula and node.factor_id not in seen:
+                embedder.embed(node.factor_id, node.formula)
+                seen.add(node.factor_id)
+
+    for admission in memory.state.recent_admissions[-10:]:
+        fid = admission.get("factor_id", "")
+        formula = admission.get("formula", "")
+        if fid and formula and fid not in seen:
+            embedder.embed(fid, formula)
+            seen.add(fid)
+
+
+def _collect_semantic_context(
+    memory: ExperienceMemory,
+    kg: Optional[FactorKnowledgeGraph],  # type: ignore[type-arg]
+    embedder: FormulaEmbedder,  # type: ignore[type-arg]
+    max_neighbors: int = 8,
+    similarity_threshold: float = 0.72,
+) -> Tuple[List[str], List[str]]:
+    """Collect semantically similar neighbors and duplicate warnings."""
+    anchors: List[Tuple[str, str, str]] = []
+    for admission in memory.state.recent_admissions[-5:]:
+        fid = admission.get("factor_id", "")
+        formula = admission.get("formula", "")
+        if fid and formula:
+            anchors.append(("recent admission", fid, formula))
+
+    if not anchors:
+        for pattern in memory.success_patterns[:5]:
+            if pattern.template:
+                anchors.append(("success pattern", pattern.name, pattern.template))
+
+    semantic_neighbors: List[str] = []
+    semantic_duplicates: List[str] = []
+    seen_matches: Set[Tuple[str, str]] = set()
+
+    if embedder.cache_size == 0:
+        return semantic_neighbors, semantic_duplicates
+
+    for anchor_kind, anchor_id, formula in anchors:
+        nearest = embedder.find_nearest(formula, k=min(5, embedder.cache_size))
+        for match_id, similarity in nearest:
+            if anchor_id == match_id:
                 continue
-            data = attrs.get("data", {})
-            if data.get("admitted"):
-                for op in data.get("operators", []):
-                    used_ops.add(op)
-    except Exception:
-        pass
+            if similarity < similarity_threshold:
+                continue
+            match_key = (anchor_id, match_id)
+            if match_key in seen_matches:
+                continue
+            seen_matches.add(match_key)
+            match_desc = _describe_factor_node(kg, match_id)
+            if match_desc == match_id:
+                semantic_neighbors.append(
+                    f"{anchor_kind} {anchor_id} -> {match_id} (sim={similarity:.2f})"
+                )
+            else:
+                semantic_neighbors.append(
+                    f"{anchor_kind} {anchor_id} -> {match_desc} (sim={similarity:.2f})"
+                )
+            if similarity >= 0.90:
+                semantic_duplicates.append(
+                    f"{anchor_kind} {anchor_id} is very close to {match_id} "
+                    f"(sim={similarity:.2f})"
+                )
+            if len(semantic_neighbors) >= max_neighbors:
+                return semantic_neighbors, semantic_duplicates
 
-    gaps = template_ops - used_ops
-    return sorted(gaps)
+    return semantic_neighbors, semantic_duplicates
 
 
 def _describe_factor_node(
@@ -198,15 +305,16 @@ def _describe_factor_node(
     factor_id: str,
 ) -> str:
     """Render a factor node into short prompt-friendly text."""
-    try:
-        attrs = kg._graph.nodes.get(factor_id, {})
-        data = attrs.get("data", {})
-    except Exception:
+    if kg is None:
         return factor_id
 
-    category = data.get("category", "") or "unknown"
-    ic_mean = data.get("ic_mean")
-    formula = data.get("formula", "")
+    node = kg.get_factor_node(factor_id)
+    if node is None:
+        return factor_id
+
+    category = node.category or "unknown"
+    ic_mean = node.ic_mean
+    formula = node.formula
     summary = factor_id
     if category:
         summary += f" [{category}]"

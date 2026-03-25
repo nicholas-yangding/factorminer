@@ -179,6 +179,32 @@ class FormulaEmbedder:
         self._tfidf_dirty = True
         return vec
 
+    def remove(self, factor_id: str) -> bool:
+        """Remove a cached embedding by factor id."""
+        if factor_id not in self._cache:
+            return False
+
+        self._cache.pop(factor_id, None)
+        self._ids = [fid for fid in self._ids if fid != factor_id]
+        self._index = None
+        self._index_dirty = True
+        self._tfidf_dirty = True
+        return True
+
+    def clear(self) -> None:
+        """Clear all cached embeddings and search state."""
+        self._cache.clear()
+        self._ids.clear()
+        self._index = None
+        self._index_dirty = True
+        self._tfidf = None
+        self._tfidf_dirty = False
+
+    @property
+    def cache_size(self) -> int:
+        """Return the number of cached factor embeddings."""
+        return len(self._cache)
+
     def find_nearest(
         self,
         formula: str,

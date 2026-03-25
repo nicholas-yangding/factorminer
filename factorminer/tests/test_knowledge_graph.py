@@ -29,6 +29,23 @@ def test_add_factor():
     assert kg.get_factor_count() == 1
     # Operator node should also be created
     assert kg.get_edge_count() >= 1
+    assert kg.get_factor_node("f1") is not None
+
+
+def test_list_factor_nodes_filters_admitted():
+    kg = FactorKnowledgeGraph()
+    kg.add_factor(FactorNode(
+        factor_id="f1", formula="CsRank($close)", operators=["CsRank"], admitted=True,
+    ))
+    kg.add_factor(FactorNode(
+        factor_id="f2", formula="Neg($volume)", operators=["Neg"], admitted=False,
+    ))
+
+    admitted_ids = [node.factor_id for node in kg.list_factor_nodes(admitted_only=True)]
+    all_ids = [node.factor_id for node in kg.list_factor_nodes()]
+
+    assert admitted_ids == ["f1"]
+    assert set(all_ids) == {"f1", "f2"}
 
 
 def test_add_correlation_edge():
@@ -109,6 +126,23 @@ def test_save_load_roundtrip():
     kg2 = FactorKnowledgeGraph.from_dict(data)
     assert kg2.get_factor_count() == 2
     assert kg2.get_edge_count() == kg.get_edge_count()
+
+
+def test_remove_factor_prunes_graph_state():
+    kg = FactorKnowledgeGraph()
+    kg.add_factor(FactorNode(
+        factor_id="f1",
+        formula="CsRank(Neg($close))",
+        operators=["CsRank", "Neg"],
+        features=["$close"],
+        admitted=True,
+    ))
+
+    assert kg.remove_factor("f1") is True
+    assert kg.get_factor_count() == 0
+    assert kg.get_factor_node("f1") is None
+    assert kg.get_edge_count() == 0
+    assert kg.remove_factor("f1") is False
 
 
 # -----------------------------------------------------------------------

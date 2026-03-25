@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from factorminer.agent.llm_interface import LLMProvider
 from factorminer.agent.output_parser import CandidateFactor
+from factorminer.agent.prompt_builder import normalize_factor_references
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +363,7 @@ class CriticAgent:
         library_state = library_state or {}
         memory_signal = memory_signal or {}
 
-        existing_factors: List[str] = list(
+        existing_factors: List[str] = normalize_factor_references(
             library_state.get("recent_admissions", [])
         )
         mem_str = self._memory_signal_to_str(memory_signal)

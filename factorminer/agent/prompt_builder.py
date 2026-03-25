@@ -131,6 +131,40 @@ Your goal is to generate novel, predictive factor expressions using a tree-struc
 # PromptBuilder
 # ---------------------------------------------------------------------------
 
+def normalize_factor_references(entries: Optional[List[Any]]) -> List[str]:
+    """Convert mixed factor metadata into prompt-safe string references."""
+    if not entries:
+        return []
+
+    normalized: List[str] = []
+    seen: set[str] = set()
+
+    for entry in entries:
+        text = ""
+        if isinstance(entry, str):
+            text = entry.strip()
+        elif isinstance(entry, dict):
+            formula = str(entry.get("formula", "")).strip()
+            name = str(entry.get("name", "")).strip()
+            category = str(entry.get("category", "")).strip()
+            if formula and name:
+                text = f"{name}: {formula}"
+            elif formula:
+                text = formula
+            elif name and category:
+                text = f"{name} [{category}]"
+            elif name:
+                text = name
+        elif entry is not None:
+            text = str(entry).strip()
+
+        if text and text not in seen:
+            normalized.append(text)
+            seen.add(text)
+
+    return normalized
+
+
 class PromptBuilder:
     """Constructs system and user prompts for factor generation.
 
@@ -190,7 +224,9 @@ class PromptBuilder:
             f"Library size: {lib_size} / {target} factors."
         )
 
-        recent = library_state.get("recent_admissions", [])
+        recent = normalize_factor_references(
+            library_state.get("recent_admissions", [])
+        )
         if recent:
             sections.append(
                 "Recently admitted factors:\n"
@@ -388,7 +424,9 @@ def build_specialist_prompt(
         f"\n## LIBRARY STATUS\nCurrent: {lib_size}/{target} factors."
     )
 
-    recent = library_diagnostics.get("recent_admissions", [])
+    recent = normalize_factor_references(
+        library_diagnostics.get("recent_admissions", [])
+    )
     if recent:
         sections.append(
             "Recently admitted (avoid similar patterns):\n"

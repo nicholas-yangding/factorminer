@@ -194,3 +194,36 @@ def test_debate_generator_with_critic():
     result = gen.generate_batch(batch_size=10)
     assert isinstance(result, list)
     assert len(result) > 0
+
+
+def test_debate_generator_accepts_dict_recent_admissions():
+    provider = MockProvider()
+    gen = DebateGenerator(
+        llm_provider=provider,
+        debate_config=DebateConfig(
+            enable_critic=True,
+            candidates_per_specialist=2,
+            top_k_after_critic=6,
+        ),
+    )
+
+    result = gen.generate_batch(
+        batch_size=6,
+        library_state={
+            "recent_admissions": [
+                {
+                    "id": 7,
+                    "name": "volatilityminer_factor_2",
+                    "category": "VWAP",
+                },
+                {
+                    "id": 8,
+                    "name": "regimeminer_factor_2",
+                    "category": "Amount",
+                },
+            ]
+        },
+    )
+
+    assert isinstance(result, list)
+    assert len(result) > 0

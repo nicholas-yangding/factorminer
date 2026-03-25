@@ -12,7 +12,7 @@ except ImportError:
     HAS_HELIX = False
 
 from factorminer.agent.llm_interface import MockProvider
-from factorminer.core.factor_library import Factor
+from factorminer.core.factor_library import Factor, FactorLibrary
 from factorminer.core.config import MiningConfig
 from factorminer.core.ralph_loop import EvaluationResult
 
@@ -203,3 +203,49 @@ def test_revoke_admission_rebuilds_library_indices(small_tensor):
     assert loop.library._id_to_index == {list(loop.library.factors.keys())[0]: 0}
     assert loop.library.correlation_matrix is not None
     assert loop.library.correlation_matrix.shape == (1, 1)
+
+
+def test_helix_embedding_screen_filters_library_duplicates(small_tensor):
+    """Embedding-aware synthesis should drop near-duplicates of admitted factors."""
+    data, returns = small_tensor
+    config = MiningConfig(target_library_size=5, max_iterations=1)
+    provider = MockProvider()
+
+    library = FactorLibrary(correlation_threshold=0.95, ic_threshold=0.0001)
+    library.admit_factor(
+        Factor(
+            id=0,
+            name="existing_factor",
+            formula="Mean($close, 5)",
+            category="test",
+            ic_mean=0.1,
+            icir=1.0,
+            ic_win_rate=0.6,
+            max_correlation=0.0,
+            batch_number=0,
+            signals=np.ones_like(returns),
+        )
+    )
+
+    loop = HelixLoop(
+        config=config,
+        data_tensor=data,
+        returns=returns,
+        llm_provider=provider,
+        library=library,
+        canonicalize=False,
+        enable_embeddings=True,
+        enable_knowledge_graph=False,
+        enable_auto_inventor=False,
+    )
+
+    deduped, canon_dupes, semantic_dupes = loop._canonicalize_and_dedup(
+        [
+            ("dup_factor", "Mean($close, 5)"),
+            ("novel_factor", "Std($close, 5)"),
+        ]
+    )
+
+    assert canon_dupes == 0
+    assert semantic_dupes == 1
+    assert deduped == [("novel_factor", "Std($close, 5)")]
