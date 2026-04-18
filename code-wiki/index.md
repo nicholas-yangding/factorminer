@@ -40,6 +40,7 @@
 ## Concepts (概念)
 
 - [expression-tree](concepts/expression-tree.md) - 表达式树数据结构
+- [factor-generator](concepts/factor-generator.md) - LLM 因子生成器
 - [ralph-loop](concepts/ralph-loop.md) - Ralph 挖掘循环
 - [experience-memory](concepts/experience-memory.md) - 经验记忆系统
 - [factor-evaluation](concepts/factor-evaluation.md) - 因子评估流程

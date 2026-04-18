@@ -18,6 +18,7 @@
 
 **创建的概念页面:**
 - `concepts/expression-tree.md` - 表达式树
+- `concepts/factor-generator.md` - 因子生成器（LLM 驱动）
 - `concepts/ralph-loop.md` - Ralph 循环
 - `concepts/experience-memory.md` - 经验记忆
 - `concepts/factor-evaluation.md` - 因子评估
@@ -33,3 +34,10 @@
 - operators: 60+ 算子覆盖 7 个类别
 - memory: 经验记忆、知识图谱、嵌入
 - evaluation: IC/ICIR 指标、多阶段评估管道
+
+### fix | Fix broken links and add missing page
+
+- 添加缺失的 `concepts/factor-generator.md` 概念页面
+- 修复 `modules/data.md` 和 `modules/benchmark.md` 中的断链
+- 更新 `index.md` 添加 factor-generator 链接
+- 文档化双 FactorGenerator 架构（agent 层和 core 层）
