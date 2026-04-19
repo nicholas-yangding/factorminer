@@ -37,6 +37,30 @@ Data 模块负责市场数据加载、预处理、合成数据生成、张量构
 
 ---
 
+## 复权价格规则 ⚠️
+
+**重要规范：因子计算必须使用后复权 (`hfq`) 价格，结果展示时同时提供除权价。**
+
+| 场景 | 复权类型 | 原因 |
+|------|----------|------|
+| **因子计算/IC评估** | `hfq` (后复权) | 保持历史价格可比性，避免除权缺口 |
+| **结果展示** | 同时展示 hfq 和除权价 | 完整参考信息 |
+
+```python
+# ✅ 正确做法
+loader_hfq = AShareDataLoader(adj="hfq")  # 计算用
+loader_raw = AShareDataLoader(adj=None)   # 展示用
+
+df_hfq = loader_hfq.load()  # 因子计算用这个
+df_raw = loader_raw.load()  # 展示时对比
+
+# 结果输出应包含两种价格
+# 后复权价: XX.XX元 (用于计算)
+# 除权价:   XX.XX元 (实际股价)
+```
+
+---
+
 # AShareDataLoader (A股数据加载器)
 
 ## 概述
