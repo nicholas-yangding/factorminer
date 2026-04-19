@@ -59,6 +59,16 @@
 - [dual-lane](design/dual-lane.md) - 双车道架构（Paper Lane vs Helix Lane）
 - [test-strategy](design/test-strategy.md) - 测试策略（27 个测试文件）
 
+## Practice (实战)
+
+- [astock-quickstart](practice/astock-quickstart.md) - A股数据使用速查
+- [factor-mining-workflow](practice/factor-mining-workflow.md) - 因子挖掘实战流程
+- [ic-analysis-guide](practice/ic-analysis-guide.md) - IC 分析指南
+
+## Troubleshooting (排查)
+
+- [common-issues](troubleshooting/common-issues.md) - 常见问题排查
+
 ## 目录结构
 
 ```
