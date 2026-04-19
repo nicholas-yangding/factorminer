@@ -125,7 +125,7 @@ def compute_icir(ic_series: np.ndarray) -> float:
 
 
 def compute_ic_mean(ic_series: np.ndarray) -> float:
-    """Compute mean absolute IC.
+    """Compute mean IC (signed, can be negative).
 
     Parameters
     ----------
@@ -134,6 +134,25 @@ def compute_ic_mean(ic_series: np.ndarray) -> float:
     Returns
     -------
     float
+        Signed mean IC.
+    """
+    valid = ic_series[~np.isnan(ic_series)]
+    if len(valid) == 0:
+        return 0.0
+    return float(np.mean(valid))
+
+
+def compute_ic_abs_mean(ic_series: np.ndarray) -> float:
+    """Compute mean of absolute IC values (always positive).
+
+    Parameters
+    ----------
+    ic_series : np.ndarray
+
+    Returns
+    -------
+    float
+        Mean of |IC| values.
     """
     valid = ic_series[~np.isnan(ic_series)]
     if len(valid) == 0:
@@ -359,8 +378,8 @@ def compute_factor_stats(
 
     stats: dict = {
         "ic_series": ic_series,
-        "ic_mean": float(np.mean(valid_ic)) if len(valid_ic) > 0 else 0.0,
-        "ic_abs_mean": compute_ic_mean(ic_series),
+        "ic_mean": compute_ic_mean(ic_series),
+        "ic_abs_mean": compute_ic_abs_mean(ic_series),
         "icir": compute_icir(ic_series),
         "ic_win_rate": compute_ic_win_rate(ic_series),
         "ic_std": float(np.std(valid_ic, ddof=1)) if len(valid_ic) > 2 else 0.0,
