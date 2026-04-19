@@ -76,12 +76,13 @@ phase2:
 ```python
 @dataclass
 class DebateResult:
-    score: float              # 综合评分
-    statistical_merit: float # 统计优势
-    operator_complexity: float # 算子复杂度
-    market_understanding: float # 市场理解
-    concerns: List[str]       # 担忧点
-    suggestions: List[str]    # 建议
+    all_proposals: List[str]              # 所有专家原始提议
+    after_dedup: List[str]                # SymPy 去重后
+    after_critic: List[str]               # 通过批评者预过滤
+    critic_scores: List[CriticScore]      # 多维评分
+    specialist_proposals: Dict[str, List[str]]  # 各专家提议
+    specialist_success_rates: Dict[str, float]  # 各专家历史成功率
+    debate_stats: Dict[str, Any]          # 统计摘要
 ```
 
 ## Canonicalization (规范化)

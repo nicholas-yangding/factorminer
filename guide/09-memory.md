@@ -58,11 +58,12 @@ SuccessPattern(
 ```python
 @dataclass
 class ForbiddenDirection:
-    name: str              # "Pure Price Ratio"
-    description: str        # 为什么不work
-    template: str           # 避免的模式
-    reason: str            # 原因
-    occurrence_count: int
+    name: str                      # "Pure Price Ratio"
+    description: str                # 为什么不work
+    correlated_factors: List[str]   # 相关的失败因子
+    typical_correlation: float     # 典型相关性
+    reason: str                    # 原因
+    occurrence_count: int = 0
 ```
 
 ### 3. StrategicInsight (战略洞察)
@@ -70,10 +71,9 @@ class ForbiddenDirection:
 ```python
 @dataclass
 class StrategicInsight:
-    topic: str            # "Regime Awareness"
-    content: str          # 洞察内容
-    confidence: float     # 0.0 - 1.0
-    supporting_factors: List[str]
+    insight: str          # 洞察内容
+    evidence: str         # 证据
+    batch_source: int = 0  # 来源批次
 ```
 
 ## 检索流程

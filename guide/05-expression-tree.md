@@ -38,6 +38,10 @@ class Node(ABC):
     @abstractmethod
     def size(self) -> int:
         """返回节点数量"""
+    
+    @abstractmethod
+    def clone(self) -> "Node":
+        """返回深拷贝"""
 ```
 
 ### 节点类型
