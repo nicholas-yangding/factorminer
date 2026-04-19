@@ -46,6 +46,7 @@ from factorminer.agent.prompt_builder import PromptBuilder
 from factorminer.evaluation.metrics import (
     compute_factor_stats,
     compute_ic,
+    compute_ic_abs_mean,
     compute_ic_mean,
     compute_ic_win_rate,
     compute_icir,
@@ -320,19 +321,19 @@ class ValidationPipeline:
             fast_signals = signals[self._fast_indices, :]
             fast_returns = self.returns[self._fast_indices, :]
             fast_stats = compute_factor_stats(fast_signals, fast_returns)
-            fast_ic = fast_stats["ic_abs_mean"]
+            fast_ic_mean = fast_stats["ic_mean"]
 
-            if fast_ic < self.ic_threshold:
-                result.ic_mean = fast_ic
+            if abs(fast_ic_mean) < self.ic_threshold:
+                result.ic_mean = fast_ic_mean
                 result.rejection_reason = (
-                    f"Fast-screen IC {fast_ic:.4f} < threshold {self.ic_threshold}"
+                    f"Fast-screen IC {fast_ic_mean:.4f} < threshold {self.ic_threshold}"
                 )
                 result.stage_passed = 0
                 return result
 
         # Full IC statistics on all assets
         stats = compute_factor_stats(signals, self.returns)
-        result.ic_mean = stats["ic_abs_mean"]
+        result.ic_mean = stats["ic_mean"]
         result.icir = stats["icir"]
         result.ic_win_rate = stats["ic_win_rate"]
         result.target_stats = {"paper": stats}
@@ -361,7 +362,7 @@ class ValidationPipeline:
             result.effective_rank_gain = score_vector_obj.geometry.effective_rank_gain
 
         # Stage 1 gate: IC threshold (full data)
-        quality_gate = result.ic_mean
+        quality_gate = abs(result.ic_mean)
         quality_label = "IC"
         if self._research_enabled():
             quality_gate = result.research_score

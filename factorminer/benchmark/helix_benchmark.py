@@ -1137,7 +1137,7 @@ class HelixBenchmark:
         """Evaluate candidates; returns list of result dicts."""
         from factorminer.core.parser import try_parse
         from factorminer.evaluation.metrics import (
-            compute_ic, compute_ic_mean, compute_icir, compute_ic_win_rate
+            compute_ic, compute_ic_mean, compute_ic_abs_mean, compute_icir, compute_ic_win_rate
         )
 
         results = []
@@ -1151,6 +1151,7 @@ class HelixBenchmark:
                     continue
                 ic_series = compute_ic(signals, returns)
                 ic_mean = compute_ic_mean(ic_series)
+                ic_abs_mean = compute_ic_abs_mean(ic_series)
                 icir = compute_icir(ic_series)
                 win_rate = compute_ic_win_rate(ic_series)
                 results.append({
@@ -1158,6 +1159,7 @@ class HelixBenchmark:
                     "formula": formula,
                     "category": category,
                     "ic_mean": ic_mean,
+                    "ic_abs_mean": ic_abs_mean,
                     "icir": icir,
                     "ic_win_rate": win_rate,
                     "signals": signals,
@@ -1175,9 +1177,9 @@ class HelixBenchmark:
         """Build a diversified factor library with IC and correlation admission."""
         from factorminer.evaluation.metrics import compute_pairwise_correlation
 
-        # Filter by IC threshold
-        passing = [r for r in factor_results if r["ic_mean"] >= self.ic_threshold]
-        passing.sort(key=lambda x: x["ic_mean"], reverse=True)
+        # Filter by IC threshold (use signed IC - must predict correct direction)
+        passing = [r for r in factor_results if abs(r["ic_mean"]) >= self.ic_threshold]
+        passing.sort(key=lambda x: abs(x["ic_mean"]), reverse=True)
 
         library: List[dict] = []
         for candidate in passing:
