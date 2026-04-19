@@ -11,3 +11,6 @@ build/
 dist/
 *.egg-info/
 .worktrees/
+__pycache__/
+*.pyc
+*.pyo
