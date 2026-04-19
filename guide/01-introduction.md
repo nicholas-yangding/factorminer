@@ -46,7 +46,7 @@ FactorMiner 基于论文：
 
 ```
 因子 = 收盘价 / 20日均线 - 1
-公式 = $close / ts_mean($close, 20) - 1
+公式 = $close / Mean($close, 20) - 1
 ```
 
 这个因子衡量当前价格相对于近期均线的偏离程度。
@@ -56,11 +56,11 @@ FactorMiner 基于论文：
 因子在 FactorMiner 中以**表达式树**存储：
 
 ```
-表达式: $close / ts_mean($close, 20) - 1
+表达式: $close / Mean($close, 20) - 1
 
         ┌──► $close (LeafNode)
         │
-    div ◄── ts_mean ──┬──► $close (LeafNode)
+    div ◄── Mean ──┬──► $close (LeafNode)
         │              └──── 20 (ConstantNode)
         │
     neg

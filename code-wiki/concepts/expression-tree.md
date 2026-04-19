@@ -29,12 +29,12 @@ def evaluate(self, data: Dict[str, np.ndarray]) -> np.ndarray:
 
 ## 示例
 
-表达式 `$close / ts_mean($close, 20) - 1` 解析为：
+表达式 `$close / Mean($close, 20) - 1` 解析为：
 
 ```
 OperatorNode(div)
 ├── LeafNode($close)
-└── OperatorNode(ts_mean)
+└── OperatorNode(Mean)
     ├── LeafNode($close)
     └── ConstantNode(20)
 ```

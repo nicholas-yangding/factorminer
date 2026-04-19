@@ -12,7 +12,7 @@
     LeafNode     ConstantNode   OperatorNode
         │              │              │
    $close, $volume    20         +, -, *, /
-                                     ts_mean, cs_rank
+                                     Mean, CsRank
 ```
 
 ### 代码结构
@@ -78,14 +78,14 @@ class OperatorNode(Node):
 ### 算子函数
 
 ```
-ts_mean(x, window)      # 时间序列均值
-ts_std(x, window)       # 时间序列标准差
-ts_returns(x, period)  # 收益率
-ts_delta(x, period)     # 变化量
-ts_corr(x, y, window)   # 时间序列相关性
-ts_rank(x, window)      # 时间序列排名
-cs_rank(x)              # 横截面排名
-cs_zscore(x)            # 横截面标准化
+Mean(x, window)      # 时间序列均值
+Std(x, window)       # 时间序列标准差
+Return(x, period)  # 收益率
+Delta(x, period)     # 变化量
+Corr(x, y, window)   # 时间序列相关性
+TsRank(x, window)      # 时间序列排名
+CsRank(x)              # 横截面排名
+CsZscore(x)            # 横截面标准化
 ema(x, span)            # 指数移动平均
 IfElse(cond, then, else)  # 条件
 ```
@@ -124,23 +124,23 @@ OperatorNode(add)
 
 ### 函数公式
 
-公式: `ts_mean($close, 20)`
+公式: `Mean($close, 20)`
 
 ```
-OperatorNode(ts_mean)
+OperatorNode(Mean)
 ├── LeafNode($close)
 └── ConstantNode(20)
 ```
 
 ### 复合公式
 
-公式: `$close / ts_mean($close, 20) - 1`
+公式: `$close / Mean($close, 20) - 1`
 
 ```
 OperatorNode(sub)
 ├── OperatorNode(div)
 │   ├── LeafNode($close)
-│   └── OperatorNode(ts_mean)
+│   └── OperatorNode(Mean)
 │       ├── LeafNode($close)
 │       └── ConstantNode(20)
 └── ConstantNode(1)
@@ -178,7 +178,7 @@ data = {
 │                │                                          │
 │                ▼                                          │
 │   ┌─────────────────────────────────────────────────┐    │
-│   │  OperatorNode(ts_mean)                           │    │
+│   │  OperatorNode(Mean)                           │    │
 │   │  ├── children[0] = LeafNode($close) ──▶ (M,T)  │    │
 │   │  └── children[1] = ConstantNode(20)            │    │
 │   │                                                  │    │
@@ -190,7 +190,7 @@ data = {
 │   ┌─────────────────────────────────────────────────┐    │
 │   │  OperatorNode(div)                               │    │
 │   │  ├── left = LeafNode($close) ──▶ (M,T)          │    │
-│   │  └── right = ts_mean 输出 ──▶ (M,T)             │    │
+│   │  └── right = Mean 输出 ──▶ (M,T)             │    │
 │   │                                                  │    │
 │   │  计算: (M,T) / (M,T) → (M,T)                    │    │
 │   └─────────────────────────────────────────────────┘    │
@@ -207,11 +207,11 @@ data = {
 from factorminer.core.parser import parse
 
 # 解析 DSL 字符串
-tree = parse("$close / ts_mean($close, 20) - 1")
+tree = parse("$close / Mean($close, 20) - 1")
 
 # 获取 DSL 字符串
 print(tree.to_string())
-# "$close / ts_mean($close, 20) - 1"
+# "$close / Mean($close, 20) - 1"
 
 # 求值
 data = {"$close": np.array([[10, 11, 12], [20, 21, 22]])}

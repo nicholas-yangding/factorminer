@@ -27,9 +27,9 @@
 
 | 因子名称 | 公式 | 含义 |
 |---------|------|------|
-| 均线偏离 | `$close / ts_mean($close, 20) - 1` | 价格相对均线的偏离 |
-| 动量 | `ts_returns($close, 20)` | 20日收益率 |
-| 成交量异常 | `$volume / ts_mean($volume, 20)` | 量比 |
+| 均线偏离 | `$close / Mean($close, 20) - 1` | 价格相对均线的偏离 |
+| 动量 | `Return($close, 20)` | 20日收益率 |
+| 成交量异常 | `$volume / Mean($volume, 20)` | 量比 |
 
 ### 因子的结构
 
@@ -100,12 +100,12 @@ Node (抽象基类)
 
 ### 示例
 
-表达式: `$close / ts_mean($close, 20) - 1`
+表达式: `$close / Mean($close, 20) - 1`
 
 ```
                          div
                         /   \
-                    Leaf    ts_mean
+                    Leaf    Mean
                    ($close)   /   \
                            Leaf  Constant
                           ($close)  (20)
@@ -145,8 +145,8 @@ $returns # 收益率
 ### 函数调用
 
 ```
-ts_mean($close, 20)    # 时间序列均值
-cs_rank($close)        # 横截面排名
+Mean($close, 20)    # 时间序列均值
+CsRank($close)        # 横截面排名
 IfElse(cond, a, b)     # 条件函数
 ```
 
@@ -162,16 +162,16 @@ abs log sqrt sign  # 一元运算
 ```python
 # 均线金叉/死叉
 IfElse(
-    ts_mean($close, 5) > ts_mean($close, 20),
+    Mean($close, 5) > Mean($close, 20),
     1,
     -1
 )
 
 # 量价背离
-$close - ts_mean($close, 20) * ($volume / ts_mean($volume, 20) - 1)
+$close - Mean($close, 20) * ($volume / Mean($volume, 20) - 1)
 
 # 波动率比率
-ts_std($returns, 20) / ts_mean(ts_abs($returns), 20)
+Std($returns, 20) / Mean(Abs($returns), 20)
 ```
 
 ## 5. 算子 (Operator)
@@ -186,11 +186,11 @@ ts_std($returns, 20) / ts_mean(ts_abs($returns), 20)
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ARITHMETIC    │  +, -, *, /, abs, log, sqrt, pow        │
-│  STATISTICAL   │  ts_mean, ts_std, ts_skew, ts_kurt        │
-│  TIMESERIES    │  ts_returns, ts_delta, ts_corr, ts_rank    │
-│  CROSS_SECTION │  cs_rank, cs_zscore, cs_mean               │
+│  STATISTICAL   │  Mean, Std, Skew, Kurt        │
+│  TIMESERIES    │  Return, Delta, Corr, TsRank    │
+│  CROSS_SECTION │  CsRank, CsZscore, CsMean               │
 │  SMOOTHING     │  ema, sma, wma                            │
-│  REGRESSION    │  ts_reg, ts_slope, ts_resi                │
+│  REGRESSION    │  Reg, Slope, Resi                │
 │  LOGICAL       │  IfElse, and_, or_, not_                  │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -200,10 +200,10 @@ ts_std($returns, 20) / ts_mean(ts_abs($returns), 20)
 
 | 签名 | 说明 | 示例 |
 |------|------|------|
-| `TIME_SERIES_TO_TIME_SERIES` | 沿时间轴滚动 | `ts_mean($close, 20)` |
-| `CROSS_SECTION_TO_CROSS_SECTION` | 截面运算 | `cs_rank($close)` |
+| `TIME_SERIES_TO_TIME_SERIES` | 沿时间轴滚动 | `Mean($close, 20)` |
+| `CROSS_SECTION_TO_CROSS_SECTION` | 截面运算 | `CsRank($close)` |
 | `ELEMENT_WISE` | 点对点运算 | `abs($returns)` |
-| `REDUCE_TIME` | 压缩时间轴 | `ts_sum($returns, 252)` |
+| `REDUCE_TIME` | 压缩时间轴 | `Sum($returns, 252)` |
 
 ## 6. 因子库 (Factor Library)
 

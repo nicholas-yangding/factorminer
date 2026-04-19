@@ -13,8 +13,8 @@ $open, $high, $low, $close, $volume, $amt, $vwap, $returns
 
 ### 函数调用
 ```
-ts_mean($close, 20)        # 时间序列函数
-cs_rank($close)            # 横截面函数
+Mean($close, 20)        # 时间序列函数
+CsRank($close)            # 横截面函数
 IfElse(cond, then, else)    # 条件函数
 ```
 
@@ -66,9 +66,9 @@ def parse(expr: str) -> ExpressionTree:
 | DSL 表达式 | 含义 |
 |-----------|------|
 | `$close` | 收盘价序列 |
-| `ts_mean($close, 20)` | 20 日收盘价均线 |
-| `$close / ts_mean($close, 20) - 1` | 收盘价相对均线的偏离 |
-| `cs_rank($close)` | 收盘价的横截面排名 |
+| `Mean($close, 20)` | 20 日收盘价均线 |
+| `$close / Mean($close, 20) - 1` | 收盘价相对均线的偏离 |
+| `CsRank($close)` | 收盘价的横截面排名 |
 | `IfElse($returns > 0, 1, -1)` | 收益率为正则 1，否则 -1 |
 
 ## 设计决策

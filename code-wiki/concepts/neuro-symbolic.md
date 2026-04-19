@@ -93,7 +93,7 @@ neural_leaf.train(market_data, target_returns, epochs=100)
 # 2. 插入表达式树
 tree = OperatorNode("mul",
     neural_leaf,  # 神经符号节点
-    OperatorNode("ts_mean", LeafNode("$close"), ConstantNode(20))
+    OperatorNode("Mean", LeafNode("$close"), ConstantNode(20))
 )
 
 # 3. 评估
