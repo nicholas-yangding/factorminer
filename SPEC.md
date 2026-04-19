@@ -1,6 +1,6 @@
 # AShare Integration - Implementation Spec
 
-## Status: In Progress
+## Status: Feature Complete
 
 ## Overview
 
@@ -26,6 +26,7 @@ Integrate `stock-data` SDK into FactorMiner to enable A-share market factor rese
 - [x] AShareDataLoader tests (`test_astock.py`)
 - [x] IC Metrics TDD tests (`test_ic_metrics_tdd.py`)
 - [x] Validation IC TDD tests (`test_validation_ic_tdd.py`)
+- [x] AShare Demo tests (`test_astock_demo.py`) - factor computation with IC evaluation
 
 ## TDD Process
 
@@ -70,6 +71,7 @@ cd .worktrees/astock-loader
 python -m pytest factorminer/tests/test_ic_metrics_tdd.py \
                  factorminer/tests/test_validation_ic_tdd.py \
                  factorminer/tests/test_astock.py \
+                 factorminer/tests/test_astock_demo.py \
                  -v
 
 # Manual verification
@@ -100,13 +102,25 @@ loader.close()
 ## Git Log
 
 ```
-4694ac6 feat: add AShareDataLoader for stock-data SDK integration with moneyflow features
+93074bd Add test_astock_demo.py with AShare data factor demo tests
 9692b0b test: add TDD tests for IC metrics and validation pipeline
+4694ac6 feat: add AShareDataLoader for stock-data SDK integration with moneyflow features
 bcd371c fix: correct IC metric assignments - use signed ic_mean, absolute comparison for threshold
+```
+
+## Demo Results
+
+```
+Factor                                      IC Mean     IC Abs       ICIR
+------------------------------------------------------------------------
+Accumulation Days (20d)                     -0.0836     0.3710    -0.1623
+Accumulation Strength                        0.1660
+Combined (Days x Strength)                   0.1642
 ```
 
 ## Next Steps
 
-1. [ ] Write usage documentation in guide/
-2. [ ] Implement CLI integration for AShareDataLoader
-3. [ ] Create DSL templates for 主力吸筹因子
+1. [x] AShare demo tests - DONE
+2. [ ] Write usage documentation in guide/
+3. [ ] Implement CLI integration for AShareDataLoader
+4. [ ] Create DSL templates for 主力吸筹因子
