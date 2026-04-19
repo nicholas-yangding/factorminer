@@ -78,28 +78,27 @@ class OperatorNode(Node):
 ### 算子函数
 
 ```
-Mean(x, window)      # 时间序列均值
-Std(x, window)       # 时间序列标准差
-Return(x, period)  # 收益率
-Delta(x, period)     # 变化量
-Corr(x, y, window)   # 时间序列相关性
+Mean(x, window)        # 时间序列均值
+Std(x, window)         # 时间序列标准差
+Return(x, window)      # 收益率 (window 即 period)
+Delta(x, window)       # 变化量
+Delay(x, window)       # 滞后
+Corr(x, y, window)     # 时间序列相关性
 TsRank(x, window)      # 时间序列排名
 CsRank(x)              # 横截面排名
-CsZscore(x)            # 横截面标准化
-ema(x, span)            # 指数移动平均
+CsZScore(x)            # 横截面标准化
+EMA(x, span)           # 指数移动平均
 IfElse(cond, then, else)  # 条件
 ```
 
 ### 算术运算
 
 ```
-+ - * /               # 四则运算
-abs(x)                # 绝对值
-log(x)                # 对数
-sqrt(x)               # 平方根
-sign(x)               # 符号
-pow(x, n)             # 幂
-neg(x)                # 相反数
++ - * /               # 四则运算 (Add, Sub, Mul, Div)
+Neg, Abs              # 相反数, 绝对值
+Log, Sqrt, Square     # 对数, 平方根, 平方
+Sign, Pow             # 符号, 幂
+Max, Min              # 最大值, 最小值
 ```
 
 ## 解析示例

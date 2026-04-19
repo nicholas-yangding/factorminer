@@ -50,20 +50,24 @@ factorminer --cpu mine --mock -n 2 -b 8 -t 10
 ## helix - Helix 挖掘
 
 ```bash
-factorminer --cpu helix --mock --debate --canonicalize -n 2 -b 8 -t 10
+factorminer helix --mock --debate --canonicalize -n 2 -b 8 -t 10
 ```
 
-**Phase 2 选项:**
+**Helix 选项:**
 
 | 选项 | 说明 |
 |------|------|
-| `--debate` | 启用辩论生成 |
-| `--canonicalize` | 启用表达式规范化 |
-| `--causal` | 启用因果验证 |
-| `--regime` | 启用市场状态分析 |
-| `--capacity` | 启用容量估计 |
-| `--significance` | 启用显著性检验 |
-| `--auto-inventor` | 启用自动算子发明 |
+| `-n, --iterations` | 迭代次数 |
+| `-b, --batch-size` | 每轮候选数 |
+| `-t, --target` | 目标库大小 |
+| `--resume` | 从已保存的库恢复 |
+| `--mock` | 使用模拟数据 |
+| `--debate/--no-debate` | 启用/禁用辩论生成 |
+| `--canonicalize/--no-canonicalize` | 启用/禁用 SymPy 规范化 |
+| `--causal/--no-causal` | 启用/禁用因果验证 |
+| `--regime/--no-regime` | 启用/禁用市场状态分析 |
+
+**注意:** `--capacity`、`--significance`、`--auto-inventor` 是配置文件选项，非 CLI 标志。Helix 功能需在配置文件中启用。
 
 ## evaluate - 评估因子库
 

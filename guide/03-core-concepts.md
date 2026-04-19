@@ -189,9 +189,9 @@ Std($returns, 20) / Mean(Abs($returns), 20)
 │  STATISTICAL   │  Mean, Std, Skew, Kurt        │
 │  TIMESERIES    │  Return, Delta, Corr, TsRank    │
 │  CROSS_SECTION │  CsRank, CsZscore, CsMean               │
-│  SMOOTHING     │  ema, sma, wma                            │
+│  SMOOTHING     │  EMA, SMA, WMA                            │
 │  REGRESSION    │  Reg, Slope, Resi                │
-│  LOGICAL       │  IfElse, and_, or_, not_                  │
+│  LOGICAL       │  IfElse, And, Or, Not                    │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
