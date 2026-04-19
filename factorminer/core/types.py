@@ -91,6 +91,12 @@ FEATURES: List[str] = [
     "$amt",
     "$vwap",
     "$returns",
+    "$net_mf_vol",
+    "$net_mf_amount",
+    "$lg_buy_vol",
+    "$lg_sell_vol",
+    "$elg_buy_vol",
+    "$elg_sell_vol",
 ]
 
 FEATURE_SET: frozenset = frozenset(FEATURES)

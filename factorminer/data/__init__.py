@@ -1,5 +1,9 @@
 """FactorMiner data pipeline: loading, preprocessing, and tensor construction."""
 
+from factorminer.data.astock import (
+    AShareDataLoader,
+    AFEATURES,
+)
 from factorminer.data.loader import (
     OHLCV_COLUMNS,
     REQUIRED_COLUMNS,
@@ -39,6 +43,9 @@ from factorminer.data.tensor_builder import (
 )
 
 __all__ = [
+    # astock
+    "AShareDataLoader",
+    "AFEATURES",
     # loader
     "OHLCV_COLUMNS",
     "REQUIRED_COLUMNS",
