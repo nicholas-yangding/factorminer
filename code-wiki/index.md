@@ -37,6 +37,9 @@
 ### Utils 模块
 - [utils](modules/utils.md) - 配置、日志、可视化
 
+### Configs 模块
+- [configs](modules/configs.md) - YAML 配置文件、参数定义
+
 ## Concepts (概念)
 
 - [expression-tree](concepts/expression-tree.md) - 表达式树数据结构
@@ -45,11 +48,16 @@
 - [experience-memory](concepts/experience-memory.md) - 经验记忆系统
 - [factor-evaluation](concepts/factor-evaluation.md) - 因子评估流程
 - [factor-library](concepts/factor-library.md) - 因子库管理
+- [provenance](concepts/provenance.md) - 因子和会话溯源追踪
+- [auto-inventor](concepts/auto-inventor.md) - 自动算子发明
+- [gpu-backend](concepts/gpu-backend.md) - GPU 加速
+- [neuro-symbolic](concepts/neuro-symbolic.md) - 神经符号算子
 
 ## Design (设计)
 
 - [typed-dsl](design/typed-dsl.md) - 类型化领域特定语言
 - [dual-lane](design/dual-lane.md) - 双车道架构（Paper Lane vs Helix Lane）
+- [test-strategy](design/test-strategy.md) - 测试策略（27 个测试文件）
 
 ## 目录结构
 

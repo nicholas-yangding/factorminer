@@ -41,3 +41,28 @@
 - 修复 `modules/data.md` 和 `modules/benchmark.md` 中的断链
 - 更新 `index.md` 添加 factor-generator 链接
 - 文档化双 FactorGenerator 架构（agent 层和 core 层）
+
+### expand | Comprehensive coverage - fill all gaps
+
+补充缺失的文档，实现全面覆盖：
+
+**新增模块页面:**
+- `modules/configs.md` - YAML 配置文件详解（default.yaml, helix_research.yaml, paper_repro.yaml 等）
+
+**新增概念页面:**
+- `concepts/provenance.md` - 因子和会话溯源追踪（SHA256 哈希、JSON 安全转换）
+- `concepts/auto-inventor.md` - 自动算子发明（LLM 提议 + 验证 + 注册）
+- `concepts/gpu-backend.md` - GPU 加速（DeviceManager、CUDA/MPS 自动选择）
+- `concepts/neuro-symbolic.md` - 神经符号算子（NeuralLeaf + 蒸馏到符号）
+
+**新增设计页面:**
+- `design/test-strategy.md` - 测试策略（27 个测试文件、fixtures、测试分类）
+
+**更新模块页面:**
+- `modules/operators.md` - 补充 auto_inventor、custom、gpu_backend、neuro_symbolic 四个子模块
+
+**当前 Wiki 统计:**
+- 模块页面: 9 个
+- 概念页面: 10 个
+- 设计页面: 3 个
+- 总计: 25 个文件

@@ -68,5 +68,33 @@ OPERATOR_REGISTRY[name] = (OperatorSpec, numpy_fn, torch_fn)
 DSL 支持的原始特征：
 `$open`, `$high`, `$low`, `$close`, `$volume`, `$amt`, `$vwap`, `$returns`
 
+### Auto Inventor (`operators/auto_inventor.py`)
+自动算子发明（Phase 2）：
+- `ProposedOperator`: LLM 提议的算子
+- `ValidationResult`: 验证结果
+- `invent_operator()`: 发明新算子
+- `register_proposed_operator()`: 注册新算子
+
+### Custom (`operators/custom.py`)
+用户自定义算子：
+- `register_custom_operator()`: 注册自定义算子
+- 支持用户通过配置文件添加新算子
+
+### GPU Backend (`operators/gpu_backend.py`)
+GPU 加速支持：
+- `DeviceManager`: 设备选择和管理
+- `to_gpu()`: NumPy 转 GPU 张量
+- `to_cpu()`: GPU 张量转 NumPy
+- 自动 CPU 回退
+
+### Neuro Symbolic (`operators/neuro_symbolic.py`)
+神经符号算子（Phase 2）：
+- `NeuralLeafNode`: 神经网络叶子节点
+- `SmallMLP`: 小型 MLP (< 5000 参数)
+- `distill_to_symbolic()`: 蒸馏到符号公式
+
 ## 来源
 - [DSL 设计](../design/typed-dsl.md)
+- [Auto Inventor](../concepts/auto-inventor.md)
+- [GPU Backend](../concepts/gpu-backend.md)
+- [Neuro Symbolic](../concepts/neuro-symbolic.md)
