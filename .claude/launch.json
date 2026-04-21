@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "factorminer CLI",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "factorminer"]
+    },
+    {
+      "name": "run_demo",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["run_demo.py"]
+    },
+    {
+      "name": "run_phase2_benchmark (mock)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["run_phase2_benchmark.py", "--mock"]
+    }
+  ]
+}
